@@ -1,0 +1,5 @@
+import {
+  "cn-cheems/moonpng",
+}
+
+pkgtype(kind: "executable")

@@ -1,0 +1,71 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "cn-cheems/moonpng"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn crc32(Bytes) -> UInt
+
+pub fn inspect(Bytes) -> Result[PngInfo, PngError]
+
+pub fn inspect_with_limits(Bytes, max_chunk_size~ : Int, max_chunks~ : Int) -> Result[PngInfo, PngError]
+
+// Errors
+
+// Types and methods
+pub(all) struct ChunkInfo {
+  offset : Int
+  kind : String
+  data_offset : Int
+  length : Int
+  crc_read : UInt
+  crc_computed : UInt
+  is_critical : Bool
+  is_private : Bool
+  is_safe_to_copy : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) enum PngError {
+  InputTooShort(Int)
+  InvalidSignature
+  InvalidLimits
+  TooManyChunks(Int)
+  TruncatedChunkHeader(Int)
+  ChunkLengthOverflow(UInt, Int)
+  ChunkTooLarge(String, Int, Int)
+  TruncatedChunk(String, Int, Int, Int)
+  InvalidChunkType(Int)
+  InvalidReservedBit(String, Int)
+  CrcMismatch(String, Int, UInt, UInt)
+  IhdrNotFirst
+  DuplicateIhdr(Int)
+  InvalidIhdrLength(Int)
+  InvalidDimensions(UInt, UInt)
+  InvalidColorFormat(Byte, Byte)
+  InvalidCompressionMethod(Byte)
+  InvalidFilterMethod(Byte)
+  InvalidInterlaceMethod(Byte)
+  MissingIhdr
+  MissingIdat
+  InvalidIendLength(Int)
+  MissingIend
+  TrailingData(Int)
+} derive(Eq, @debug.Debug)
+pub fn PngError::message(Self) -> String
+
+pub(all) struct PngInfo {
+  width : UInt
+  height : UInt
+  bit_depth : Byte
+  color_type : Byte
+  compression_method : Byte
+  filter_method : Byte
+  interlace_method : Byte
+  chunks : Array[ChunkInfo]
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,32 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  moonbit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+      - name: Show versions
+        run: moon version --all
+      - name: Check
+        run: moon check --target all --deny-warn
+      - name: Test
+        run: moon test --target all --deny-warn
+      - name: Verify generated interfaces and formatting
+        shell: bash
+        run: |
+          moon info
+          moon fmt
+          git diff --exit-code
