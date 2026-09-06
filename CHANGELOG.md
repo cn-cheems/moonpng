@@ -22,4 +22,6 @@
   including packed indexed samples and independent filtering per pass.
 - Added deterministic RGBA8 encoding with stored DEFLATE blocks, PNG checksums,
   multi-block output, round-trip tests, and input validation.
+- Added caller-selected None, Sub, Up, Average, and Paeth encoding filters plus
+  a deterministic per-row adaptive strategy.
 - Added a decoded-pixel CLI demo and decoder design documentation.

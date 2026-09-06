@@ -776,6 +776,50 @@ test "encode stored zlib data across multiple blocks" {
 }
 
 ///|
+test "round trip every encoder filter strategy" {
+  let pixels = b"\x64\x64\x64\x64\x64\x64\x64\x64" +
+    b"\x64\x64\x64\x64\x64\x64\x64\x64"
+  let strategies = [
+    @moonpng.FilterNone,
+    @moonpng.FilterSub,
+    @moonpng.FilterUp,
+    @moonpng.FilterAverage,
+    @moonpng.FilterPaeth,
+    @moonpng.FilterAdaptive,
+  ]
+  for strategy in strategies {
+    let options : @moonpng.EncodeOptions = { filter_strategy: strategy, }
+    match @moonpng.encode_rgba8_with_options(2U, 2U, pixels, options) {
+      Ok(png) =>
+        match @moonpng.decode(png) {
+          Ok(image) => @test.assert_eq(image.pixels, pixels)
+          Err(error) => fail(error.message())
+        }
+      Err(error) => fail(error.message())
+    }
+  }
+}
+
+///|
+test "choose deterministic adaptive filters per row" {
+  let pixels = b"\x64\x64\x64\x64\x64\x64\x64\x64" +
+    b"\x64\x64\x64\x64\x64\x64\x64\x64"
+  match @moonpng.encode_rgba8(2U, 2U, pixels) {
+    Ok(png) =>
+      match @moonpng.inspect(png) {
+        Ok(info) => {
+          let idat = info.chunks[1]
+          let raw_offset = idat.data_offset + 7
+          @test.assert_eq(png[raw_offset], b'\x01')
+          @test.assert_eq(png[raw_offset + 9], b'\x02')
+        }
+        Err(error) => fail(error.message())
+      }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
 test "reject invalid RGBA8 encode input" {
   match @moonpng.encode_rgba8(0U, 1U, b"") {
     Err(@moonpng.EncodeInvalidDimensions(0U, 1U)) => ()

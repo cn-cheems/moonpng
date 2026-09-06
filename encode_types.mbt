@@ -7,6 +7,29 @@ pub(all) enum EncodeError {
 } derive(Debug, Eq)
 
 ///|
+/// Scanline filtering strategy used by the PNG encoder.
+pub(all) enum FilterStrategy {
+  FilterNone
+  FilterSub
+  FilterUp
+  FilterAverage
+  FilterPaeth
+  FilterAdaptive
+} derive(Debug, Eq)
+
+///|
+/// Options controlling deterministic PNG encoding.
+pub(all) struct EncodeOptions {
+  filter_strategy : FilterStrategy
+} derive(Debug, Eq)
+
+///|
+/// Return the recommended deterministic encoder options.
+pub fn default_encode_options() -> EncodeOptions {
+  { filter_strategy: FilterAdaptive, }
+}
+
+///|
 /// Return a concise human-readable explanation for an encode error.
 pub fn EncodeError::message(self : EncodeError) -> String {
   match self {

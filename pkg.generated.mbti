@@ -16,7 +16,11 @@ pub fn decode_with_limits(Bytes, DecodeLimits) -> Result[DecodedImage, DecodeErr
 
 pub fn default_decode_limits() -> DecodeLimits
 
+pub fn default_encode_options() -> EncodeOptions
+
 pub fn encode_rgba8(UInt, UInt, Bytes) -> Result[Bytes, EncodeError]
+
+pub fn encode_rgba8_with_options(UInt, UInt, Bytes, EncodeOptions) -> Result[Bytes, EncodeError]
 
 pub fn inflate_zlib(Bytes) -> Result[Bytes, DecodeError]
 
@@ -100,6 +104,19 @@ pub(all) enum EncodeError {
   EncodePixelLengthMismatch(Int, Int)
 } derive(Eq, @debug.Debug)
 pub fn EncodeError::message(Self) -> String
+
+pub(all) struct EncodeOptions {
+  filter_strategy : FilterStrategy
+} derive(Eq, @debug.Debug)
+
+pub(all) enum FilterStrategy {
+  FilterNone
+  FilterSub
+  FilterUp
+  FilterAverage
+  FilterPaeth
+  FilterAdaptive
+} derive(Eq, @debug.Debug)
 
 pub(all) enum PngError {
   InputTooShort(Int)

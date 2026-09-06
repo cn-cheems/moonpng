@@ -49,15 +49,118 @@ fn encode_stored_zlib(raw : Bytes) -> Bytes {
 }
 
 ///|
-/// Encode row-major RGBA8 pixels as a deterministic, non-interlaced PNG.
-///
-/// The encoder writes filter type None and a standards-compliant stored
-/// DEFLATE stream. The result can be decoded without a native compression
-/// library and is byte-for-byte stable for the same input.
-pub fn encode_rgba8(
+fn encode_filter_code(strategy : FilterStrategy) -> Byte {
+  match strategy {
+    FilterNone => b'\x00'
+    FilterSub => b'\x01'
+    FilterUp => b'\x02'
+    FilterAverage => b'\x03'
+    FilterPaeth => b'\x04'
+    FilterAdaptive => b'\x00'
+  }
+}
+
+///|
+fn encode_filter_row(
+  pixels : Bytes,
+  row_start : Int,
+  row_bytes : Int,
+  bytes_per_pixel : Int,
+  has_previous_row : Bool,
+  filter : Byte,
+) -> Array[Byte] {
+  let output = Array::make(row_bytes, b'\x00')
+  for column = 0; column < row_bytes; column = column + 1 {
+    let source = pixels.unsafe_get(row_start + column).to_int()
+    let left = if column >= bytes_per_pixel {
+      pixels.unsafe_get(row_start + column - bytes_per_pixel).to_int()
+    } else {
+      0
+    }
+    let above = if has_previous_row {
+      pixels.unsafe_get(row_start + column - row_bytes).to_int()
+    } else {
+      0
+    }
+    let upper_left = if has_previous_row && column >= bytes_per_pixel {
+      pixels
+      .unsafe_get(row_start + column - row_bytes - bytes_per_pixel)
+      .to_int()
+    } else {
+      0
+    }
+    let predictor = match filter.to_int() {
+      0 => 0
+      1 => left
+      2 => above
+      3 => (left + above) / 2
+      4 => paeth_predictor(left, above, upper_left)
+      _ => 0
+    }
+    output[column] = (source - predictor).to_byte()
+  }
+  output
+}
+
+///|
+fn encode_filter_score(row : Array[Byte]) -> Int {
+  let mut score = 0
+  for byte in row {
+    let value = byte.to_int()
+    let contribution = if value < 128 { value } else { 256 - value }
+    if score > 0x7fffffff - contribution {
+      return 0x7fffffff
+    }
+    score = score + contribution
+  }
+  score
+}
+
+///|
+fn encode_choose_filter(
+  pixels : Bytes,
+  row_start : Int,
+  row_bytes : Int,
+  bytes_per_pixel : Int,
+  has_previous_row : Bool,
+  strategy : FilterStrategy,
+) -> (Byte, Array[Byte]) {
+  if strategy != FilterAdaptive {
+    let code = encode_filter_code(strategy)
+    return (
+      code,
+      encode_filter_row(
+        pixels, row_start, row_bytes, bytes_per_pixel, has_previous_row, code,
+      ),
+    )
+  }
+  let mut best_code = b'\x00'
+  let mut best_row = encode_filter_row(
+    pixels, row_start, row_bytes, bytes_per_pixel, has_previous_row, best_code,
+  )
+  let mut best_score = encode_filter_score(best_row)
+  for code_value = 1; code_value <= 4; code_value = code_value + 1 {
+    let code = code_value.to_byte()
+    let candidate = encode_filter_row(
+      pixels, row_start, row_bytes, bytes_per_pixel, has_previous_row, code,
+    )
+    let score = encode_filter_score(candidate)
+    if score < best_score {
+      best_code = code
+      best_row = candidate
+      best_score = score
+    }
+  }
+  (best_code, best_row)
+}
+
+///|
+/// Encode row-major RGBA8 pixels with caller-provided options.
+pub fn encode_rgba8_with_options(
   width : UInt,
   height : UInt,
   pixels : Bytes,
+  options : EncodeOptions,
 ) -> Result[Bytes, EncodeError] {
   if width == 0U || height == 0U {
     return Err(EncodeInvalidDimensions(width, height))
@@ -90,10 +193,18 @@ pub fn encode_rgba8(
   raw.reserve_capacity(raw_length)
   let row_bytes = width_int * 4
   for row = 0; row < height_int; row = row + 1 {
-    raw.push(b'\x00')
     let row_start = row * row_bytes
-    for column = 0; column < row_bytes; column = column + 1 {
-      raw.push(pixels.unsafe_get(row_start + column))
+    let (filter, filtered) = encode_choose_filter(
+      pixels,
+      row_start,
+      row_bytes,
+      4,
+      row > 0,
+      options.filter_strategy,
+    )
+    raw.push(filter)
+    for byte in filtered {
+      raw.push(byte)
     }
   }
 
@@ -116,4 +227,19 @@ pub fn encode_rgba8(
   )
   encode_append_chunk(output, b"IEND", b"")
   Ok(Bytes::from_array(output))
+}
+
+///|
+/// Encode row-major RGBA8 pixels as a deterministic, non-interlaced PNG.
+///
+/// The default encoder chooses the lowest-cost PNG filter for each row and
+/// writes a standards-compliant stored DEFLATE stream. The result can be
+/// decoded without a native compression library and is byte-for-byte stable
+/// for the same input.
+pub fn encode_rgba8(
+  width : UInt,
+  height : UInt,
+  pixels : Bytes,
+) -> Result[Bytes, EncodeError] {
+  encode_rgba8_with_options(width, height, pixels, default_encode_options())
 }

@@ -50,10 +50,12 @@ comparisons still use the complete 16-bit sample.
 ## Encode pipeline
 
 `encode_rgba8` validates dimensions and the exact RGBA8 buffer length before
-allocation. It prefixes each row with filter type None, splits the byte stream
-into legal 65,535-byte stored DEFLATE blocks, adds the zlib Adler-32 checksum,
-and writes IHDR, IDAT, and IEND chunks with CRC-32 values. The same input always
-produces the same PNG bytes.
+allocation. For each row, the default strategy tries all five PNG filters and
+selects the lowest sum of absolute signed-byte magnitudes, breaking ties by
+filter number. The encoder then splits the filtered bytes into legal
+65,535-byte stored DEFLATE blocks, adds the zlib Adler-32 checksum, and writes
+IHDR, IDAT, and IEND chunks with CRC-32 values. The same input and options always
+produce the same PNG bytes.
 
 ## Security invariants
 

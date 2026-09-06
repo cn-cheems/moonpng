@@ -24,6 +24,7 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - supports `tRNS` transparency for grayscale, truecolor, and indexed images;
 - converts decoded output to row-major RGBA8;
 - deterministically encodes row-major RGBA8 pixels as valid PNG files;
+- offers fixed and adaptive selection across all five PNG row filters;
 - runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
 ## Quick start
@@ -70,8 +71,10 @@ match @moonpng.encode_rgba8(1U, 1U, pixels) {
 }
 ```
 
-The initial encoder uses filter type None and stored DEFLATE blocks. Its output
-is deterministic and does not require a platform compression library.
+The default encoder selects the lowest-cost filter for each row and uses stored
+DEFLATE blocks. Its output is deterministic and does not require a platform
+compression library. `encode_rgba8_with_options` can force None, Sub, Up,
+Average, or Paeth filtering when reproducible filter control is needed.
 
 ## Inspect without decoding
 
@@ -117,7 +120,7 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add encoder filter selection and compact color formats.
+1. Add compact encoder color formats.
 2. Add streaming interfaces.
 3. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
 
