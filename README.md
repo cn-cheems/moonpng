@@ -26,6 +26,7 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - deterministically encodes 8-bit grayscale, grayscale-alpha, RGB, and RGBA
   pixels using their native PNG color types;
 - offers fixed and adaptive selection across all five PNG row filters;
+- splits zlib output across caller-sized consecutive IDAT chunks;
 - runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
 ## Quick start
@@ -80,6 +81,10 @@ Average, or Paeth filtering when reproducible filter control is needed.
 Use `encode` with `PixelGray8`, `PixelGrayAlpha8`, `PixelRgb8`, or `PixelRgba8`
 to avoid storing channels that an image does not need.
 
+`encode_with_idat_chunk_size` bounds each IDAT payload while retaining one
+continuous zlib stream. This is useful when a writer or transport prefers
+smaller independently checksummed PNG chunks.
+
 ## Inspect without decoding
 
 Use `inspect` when only container metadata and chunk information are needed:
@@ -124,7 +129,7 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add streaming interfaces.
+1. Add a bounded incremental encoder interface.
 2. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
 
 ## Project status

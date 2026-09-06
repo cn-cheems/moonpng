@@ -26,6 +26,16 @@ fn encode_append_chunk(
 }
 
 ///|
+fn encode_copy_range(data : Bytes, offset : Int, length : Int) -> Bytes {
+  let output : Array[Byte] = []
+  output.reserve_capacity(length)
+  for index = 0; index < length; index = index + 1 {
+    output.push(data.unsafe_get(offset + index))
+  }
+  Bytes::from_array(output)
+}
+
+///|
 fn encode_stored_zlib(raw : Bytes) -> Bytes {
   let output : Array[Byte] = [b'\x78', b'\x01']
   let mut offset = 0
@@ -175,14 +185,21 @@ fn encode_color_type(format : PixelFormat) -> Byte {
 }
 
 ///|
-/// Encode row-major 8-bit pixels with caller-provided options.
-pub fn encode_with_options(
+/// Encode row-major 8-bit pixels with a maximum IDAT payload size.
+///
+/// The compressed zlib stream may be split at any byte boundary. All emitted
+/// IDAT chunks remain consecutive and individually checksummed.
+pub fn encode_with_idat_chunk_size(
   width : UInt,
   height : UInt,
   format : PixelFormat,
   pixels : Bytes,
   options : EncodeOptions,
+  idat_chunk_size : Int,
 ) -> Result[Bytes, EncodeError] {
+  if idat_chunk_size <= 0 {
+    return Err(EncodeInvalidIdatChunkSize(idat_chunk_size))
+  }
   if width == 0U || height == 0U {
     return Err(EncodeInvalidDimensions(width, height))
   }
@@ -240,16 +257,46 @@ pub fn encode_with_options(
   ihdr.push(b'\x00')
   ihdr.push(b'\x00')
 
+  let compressed = encode_stored_zlib(Bytes::from_array(raw))
+  let idat_count = (compressed.length() - 1) / idat_chunk_size + 1
+  if compressed.length() > 0x7fffffff - 45 ||
+    idat_count > (0x7fffffff - 45 - compressed.length()) / 12 {
+    return Err(EncodeImageTooLarge(width, height))
+  }
   let output : Array[Byte] = []
   encode_append_bytes(output, b"\x89PNG\r\n\x1a\n")
   encode_append_chunk(output, b"IHDR", Bytes::from_array(ihdr))
-  encode_append_chunk(
-    output,
-    b"IDAT",
-    encode_stored_zlib(Bytes::from_array(raw)),
-  )
+  let mut compressed_offset = 0
+  while compressed_offset < compressed.length() {
+    let remaining = compressed.length() - compressed_offset
+    let chunk_length = if remaining > idat_chunk_size {
+      idat_chunk_size
+    } else {
+      remaining
+    }
+    encode_append_chunk(
+      output,
+      b"IDAT",
+      encode_copy_range(compressed, compressed_offset, chunk_length),
+    )
+    compressed_offset = compressed_offset + chunk_length
+  }
   encode_append_chunk(output, b"IEND", b"")
   Ok(Bytes::from_array(output))
+}
+
+///|
+/// Encode row-major 8-bit pixels with caller-provided options.
+pub fn encode_with_options(
+  width : UInt,
+  height : UInt,
+  format : PixelFormat,
+  pixels : Bytes,
+  options : EncodeOptions,
+) -> Result[Bytes, EncodeError] {
+  encode_with_idat_chunk_size(
+    width, height, format, pixels, options, 0x7fffffff,
+  )
 }
 
 ///|

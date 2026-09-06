@@ -846,6 +846,46 @@ test "encode compact 8-bit PNG color formats" {
 }
 
 ///|
+test "encode a zlib stream across consecutive IDAT chunks" {
+  let source = Array::make(32 * 4, b'\x00')
+  for index = 0; index < source.length(); index = index + 1 {
+    source[index] = (index * 17 + 3).to_byte()
+  }
+  let pixels = Bytes::from_array(source)
+  let options = @moonpng.default_encode_options()
+  match
+    @moonpng.encode_with_idat_chunk_size(
+      32U,
+      1U,
+      @moonpng.PixelRgba8,
+      pixels,
+      options,
+      11,
+    ) {
+    Ok(png) => {
+      match @moonpng.inspect(png) {
+        Ok(info) => {
+          let mut idat_count = 0
+          for chunk in info.chunks {
+            if chunk.kind == "IDAT" {
+              idat_count = idat_count + 1
+              @test.assert_eq(chunk.length <= 11, true)
+            }
+          }
+          @test.assert_eq(idat_count > 1, true)
+        }
+        Err(error) => fail(error.message())
+      }
+      match @moonpng.decode(png) {
+        Ok(image) => @test.assert_eq(image.pixels, pixels)
+        Err(error) => fail(error.message())
+      }
+    }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
 test "reject invalid RGBA8 encode input" {
   match @moonpng.encode_rgba8(0U, 1U, b"") {
     Err(@moonpng.EncodeInvalidDimensions(0U, 1U)) => ()
@@ -854,5 +894,17 @@ test "reject invalid RGBA8 encode input" {
   match @moonpng.encode_rgba8(1U, 1U, b"\x00\x01\x02") {
     Err(@moonpng.EncodePixelLengthMismatch(4, 3)) => ()
     _ => fail("expected EncodePixelLengthMismatch")
+  }
+  match
+    @moonpng.encode_with_idat_chunk_size(
+      1U,
+      1U,
+      @moonpng.PixelRgba8,
+      b"\x00\x00\x00\xff",
+      @moonpng.default_encode_options(),
+      0,
+    ) {
+    Err(@moonpng.EncodeInvalidIdatChunkSize(0)) => ()
+    _ => fail("expected EncodeInvalidIdatChunkSize")
   }
 }

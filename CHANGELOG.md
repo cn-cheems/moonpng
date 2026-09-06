@@ -26,4 +26,6 @@
   a deterministic per-row adaptive strategy.
 - Added compact 8-bit grayscale, grayscale-alpha, and RGB encoding alongside
   RGBA, with native PNG color types and round-trip coverage.
+- Added configurable IDAT payload sizing with consecutive multi-chunk output,
+  per-chunk CRC validation, and decoder round-trip coverage.
 - Added a decoded-pixel CLI demo and decoder design documentation.

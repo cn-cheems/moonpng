@@ -4,6 +4,7 @@ pub(all) enum EncodeError {
   EncodeInvalidDimensions(UInt, UInt)
   EncodeImageTooLarge(UInt, UInt)
   EncodePixelLengthMismatch(Int, Int)
+  EncodeInvalidIdatChunkSize(Int)
 } derive(Debug, Eq)
 
 ///|
@@ -48,5 +49,7 @@ pub fn EncodeError::message(self : EncodeError) -> String {
       "image \{width}x\{height} is too large for an in-memory PNG"
     EncodePixelLengthMismatch(expected, actual) =>
       "pixel input requires \{expected} bytes, got \{actual}"
+    EncodeInvalidIdatChunkSize(size) =>
+      "IDAT chunk size must be positive, got \{size}"
   }
 }
