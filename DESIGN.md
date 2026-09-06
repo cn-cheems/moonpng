@@ -47,6 +47,14 @@ comparisons still use the complete 16-bit sample.
 - `PngError` covers container failures; `DecodeError` covers both container and
   pixel-data failures.
 
+## Encode pipeline
+
+`encode_rgba8` validates dimensions and the exact RGBA8 buffer length before
+allocation. It prefixes each row with filter type None, splits the byte stream
+into legal 65,535-byte stored DEFLATE blocks, adds the zlib Adler-32 checksum,
+and writes IHDR, IDAT, and IEND chunks with CRC-32 values. The same input always
+produces the same PNG bytes.
+
 ## Security invariants
 
 - No chunk payload is read before its declared range and CRC are validated.

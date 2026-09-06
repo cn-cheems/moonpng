@@ -1,6 +1,6 @@
 # MoonPNG
 
-MoonPNG is a pure MoonBit PNG parser and decoder. It validates the PNG
+MoonPNG is a pure MoonBit PNG codec toolkit. It validates the PNG
 container, inflates zlib/DEFLATE image data, reverses PNG scanline filters, and
 returns portable RGBA8 pixels without FFI or platform-specific dependencies.
 
@@ -23,6 +23,7 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - validates and expands `PLTE` palettes;
 - supports `tRNS` transparency for grayscale, truecolor, and indexed images;
 - converts decoded output to row-major RGBA8;
+- deterministically encodes row-major RGBA8 pixels as valid PNG files;
 - runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
 ## Quick start
@@ -58,6 +59,19 @@ match @moonpng.decode(png_bytes) {
 
 `DecodedImage.pixels` stores four bytes per pixel in red, green, blue, alpha
 order. Rows are contiguous from top to bottom.
+
+## Encode an image
+
+```moonbit
+let pixels = b"\xff\x00\x00\xff"
+match @moonpng.encode_rgba8(1U, 1U, pixels) {
+  Ok(png_bytes) => println("encoded \{png_bytes.length()} bytes")
+  Err(error) => println(error.message())
+}
+```
+
+The initial encoder uses filter type None and stored DEFLATE blocks. Its output
+is deterministic and does not require a platform compression library.
 
 ## Inspect without decoding
 
@@ -103,8 +117,9 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add deterministic PNG encoding and streaming interfaces.
-2. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
+1. Add encoder filter selection and compact color formats.
+2. Add streaming interfaces.
+3. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
 
 ## Project status
 

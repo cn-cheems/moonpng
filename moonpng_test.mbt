@@ -731,3 +731,58 @@ test "reject unknown critical chunk during decoding" {
     _ => fail("expected UnsupportedCriticalChunk")
   }
 }
+
+///|
+test "encode and decode deterministic RGBA8 PNG" {
+  let pixels = b"\xff\x00\x00\xff\x00\xff\x00\x80"
+  let first = @moonpng.encode_rgba8(2U, 1U, pixels)
+  let second = @moonpng.encode_rgba8(2U, 1U, pixels)
+  match (first, second) {
+    (Ok(png), Ok(repeated)) => {
+      @test.assert_eq(png, repeated)
+      match @moonpng.inspect(png) {
+        Ok(info) => {
+          @test.assert_eq(info.width, 2U)
+          @test.assert_eq(info.height, 1U)
+          @test.assert_eq(info.color_type, b'\x06')
+          @test.assert_eq(info.chunks.length(), 3)
+        }
+        Err(error) => fail(error.message())
+      }
+      match @moonpng.decode(png) {
+        Ok(image) => @test.assert_eq(image.pixels, pixels)
+        Err(error) => fail(error.message())
+      }
+    }
+    _ => fail("expected two encoded PNGs")
+  }
+}
+
+///|
+test "encode stored zlib data across multiple blocks" {
+  let source = Array::make(128 * 128 * 4, b'\x00')
+  for index = 0; index < source.length(); index = index + 1 {
+    source[index] = (index * 29 + 7).to_byte()
+  }
+  let pixels = Bytes::from_array(source)
+  match @moonpng.encode_rgba8(128U, 128U, pixels) {
+    Ok(png) =>
+      match @moonpng.decode(png) {
+        Ok(image) => @test.assert_eq(image.pixels, pixels)
+        Err(error) => fail(error.message())
+      }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "reject invalid RGBA8 encode input" {
+  match @moonpng.encode_rgba8(0U, 1U, b"") {
+    Err(@moonpng.EncodeInvalidDimensions(0U, 1U)) => ()
+    _ => fail("expected EncodeInvalidDimensions")
+  }
+  match @moonpng.encode_rgba8(1U, 1U, b"\x00\x01\x02") {
+    Err(@moonpng.EncodePixelLengthMismatch(4, 3)) => ()
+    _ => fail("expected EncodePixelLengthMismatch")
+  }
+}

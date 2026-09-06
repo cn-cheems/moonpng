@@ -16,6 +16,8 @@ pub fn decode_with_limits(Bytes, DecodeLimits) -> Result[DecodedImage, DecodeErr
 
 pub fn default_decode_limits() -> DecodeLimits
 
+pub fn encode_rgba8(UInt, UInt, Bytes) -> Result[Bytes, EncodeError]
+
 pub fn inflate_zlib(Bytes) -> Result[Bytes, DecodeError]
 
 pub fn inflate_zlib_with_limit(Bytes, max_output_size~ : Int) -> Result[Bytes, DecodeError]
@@ -91,6 +93,13 @@ pub(all) struct DecodedImage {
   pixels : Bytes
 } derive(Eq, @debug.Debug)
 pub fn DecodedImage::pixel_at(Self, Int, Int) -> Rgba8?
+
+pub(all) enum EncodeError {
+  EncodeInvalidDimensions(UInt, UInt)
+  EncodeImageTooLarge(UInt, UInt)
+  EncodePixelLengthMismatch(Int, Int)
+} derive(Eq, @debug.Debug)
+pub fn EncodeError::message(Self) -> String
 
 pub(all) enum PngError {
   InputTooShort(Int)

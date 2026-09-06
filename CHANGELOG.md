@@ -20,4 +20,6 @@
   with full-sample transparency comparison and documented RGBA8 downsampling.
 - Added Adam7 reconstruction for every supported color type and bit depth,
   including packed indexed samples and independent filtering per pass.
+- Added deterministic RGBA8 encoding with stored DEFLATE blocks, PNG checksums,
+  multi-block output, round-trip tests, and input validation.
 - Added a decoded-pixel CLI demo and decoder design documentation.
