@@ -65,6 +65,13 @@ pub(all) enum DecodeError {
   InvalidInflatedSize(Int, Int)
   InvalidFilter(Byte, Int)
   UnsupportedCriticalChunk(String)
+  MissingPalette
+  DuplicatePalette
+  InvalidPaletteLength(Int)
+  PaletteTooLarge(Int, Byte)
+  UnexpectedPalette(Byte)
+  InvalidChunkOrder(String)
+  PaletteIndexOutOfRange(Int, Int, Int)
   DuplicateTransparency
   InvalidTransparency(Byte, Int)
 } derive(Eq, @debug.Debug)

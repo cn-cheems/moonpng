@@ -13,6 +13,11 @@ verified over the chunk type and payload, and IDAT chunks must be consecutive.
 unknown critical chunk stops decoding because silently ignoring it could change
 the meaning of the image.
 
+`parse_color_data` validates `PLTE` and `tRNS` placement and size before pixel
+allocation. Indexed-color images require a palette, palette size is bounded by
+both the PNG limit and bit depth, and transparent palette entries may not
+outnumber palette entries.
+
 `inflate_zlib_with_limit` validates the RFC 1950 header, rejects preset
 dictionaries, and decodes all three RFC 1951 block kinds. Canonical Huffman
 codes are reversed for DEFLATE's least-significant-bit-first representation.
@@ -23,9 +28,12 @@ The final Adler-32 value is compared before inflated bytes are returned.
 upper-left values always come from bytes that have already been reconstructed.
 Byte conversion provides the modulo-256 arithmetic required by PNG filters.
 
-`convert_to_rgba` is the only stage that depends on PNG color type. Keeping this
-step separate makes palette expansion, packed samples, and 16-bit downsampling
-straightforward future additions.
+`convert_to_rgba` is the only stage that depends on PNG color type. Packed
+samples are read most-significant-bit first within each byte, with row padding
+discarded before the next row. Grayscale samples are scaled across the full
+8-bit range; indexed samples are checked before their palette entry is read.
+Keeping this step separate leaves 16-bit downsampling as a contained future
+addition.
 
 ## Public data model
 
@@ -44,6 +52,7 @@ straightforward future additions.
 - A DEFLATE distance cannot refer before the beginning of output.
 - A DEFLATE match cannot grow output beyond its configured limit.
 - The inflated byte count must exactly match the expected scanline layout.
+- Palette indices are checked before color or alpha entries are accessed.
 - Unsupported formats fail explicitly rather than producing approximate pixels.
 
 ## Portability

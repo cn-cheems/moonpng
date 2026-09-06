@@ -83,6 +83,13 @@ pub(all) enum DecodeError {
   InvalidInflatedSize(Int, Int)
   InvalidFilter(Byte, Int)
   UnsupportedCriticalChunk(String)
+  MissingPalette
+  DuplicatePalette
+  InvalidPaletteLength(Int)
+  PaletteTooLarge(Int, Byte)
+  UnexpectedPalette(Byte)
+  InvalidChunkOrder(String)
+  PaletteIndexOutOfRange(Int, Int, Int)
   DuplicateTransparency
   InvalidTransparency(Byte, Int)
 } derive(Debug, Eq)
@@ -98,9 +105,9 @@ pub fn DecodeError::message(self : DecodeError) -> String {
     CompressedDataTooLarge(limit) =>
       "combined IDAT data exceeds the \{limit}-byte limit"
     UnsupportedBitDepth(depth) =>
-      "pixel decoding currently supports 8-bit samples, got \{depth.to_uint()}"
+      "pixel decoding supports 1-, 2-, 4-, and 8-bit samples where allowed by the color type; got \{depth.to_uint()}"
     UnsupportedColorType(color) =>
-      "pixel decoding currently supports color types 0, 2, 4, and 6; got \{color.to_uint()}"
+      "pixel decoding currently supports color types 0, 2, 3, 4, and 6; got \{color.to_uint()}"
     UnsupportedInterlace(value) =>
       "pixel decoding currently supports non-interlaced PNGs, got interlace method \{value.to_uint()}"
     MissingIdatData => "PNG contains no compressed IDAT payload"
@@ -128,6 +135,17 @@ pub fn DecodeError::message(self : DecodeError) -> String {
     InvalidFilter(filter, row) =>
       "unsupported PNG filter \{filter.to_uint()} on row \{row}"
     UnsupportedCriticalChunk(kind) => "unsupported critical PNG chunk \{kind}"
+    MissingPalette => "indexed-color PNG is missing its required PLTE chunk"
+    DuplicatePalette => "PNG contains more than one PLTE chunk"
+    InvalidPaletteLength(length) =>
+      "PLTE length must be a non-zero multiple of three up to 768 bytes, got \{length}"
+    PaletteTooLarge(entries, depth) =>
+      "PLTE has \{entries} entries but bit depth \{depth.to_uint()} permits at most \{1 << depth.to_int()}"
+    UnexpectedPalette(color) =>
+      "PLTE is not permitted for color type \{color.to_uint()}"
+    InvalidChunkOrder(kind) => "\{kind} must appear before the first IDAT chunk"
+    PaletteIndexOutOfRange(index, x, y) =>
+      "palette index \{index} at (\{x}, \{y}) has no PLTE entry"
     DuplicateTransparency => "PNG contains more than one tRNS chunk"
     InvalidTransparency(color, length) =>
       "invalid tRNS length \{length} for color type \{color.to_uint()}"

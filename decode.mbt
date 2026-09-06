@@ -3,10 +3,16 @@ fn channels_for_color_type(color_type : Byte) -> Int {
   match color_type.to_int() {
     0 => 1
     2 => 3
+    3 => 1
     4 => 2
     6 => 4
     _ => 0
   }
+}
+
+///|
+fn bits_per_pixel(bit_depth : Byte, color_type : Byte) -> Int {
+  bit_depth.to_int() * channels_for_color_type(color_type)
 }
 
 ///|
@@ -89,19 +95,67 @@ fn read_uint16_be(data : Bytes, offset : Int) -> Int {
 }
 
 ///|
-fn parse_transparency(
+priv struct ColorData {
+  palette : Bytes?
+  palette_alpha : Bytes?
+  transparent_gray : Int?
+  transparent_rgb : (Int, Int, Int)?
+}
+
+///|
+fn copy_bytes(data : Bytes, offset : Int, length : Int) -> Bytes {
+  let output : Array[Byte] = []
+  output.reserve_capacity(length)
+  for index = 0; index < length; index = index + 1 {
+    output.push(data.unsafe_get(offset + index))
+  }
+  Bytes::from_array(output)
+}
+
+///|
+fn parse_color_data(
   data : Bytes,
   info : PngInfo,
-) -> Result[(Int?, (Int, Int, Int)?), DecodeError] {
-  let mut found = false
+) -> Result[ColorData, DecodeError] {
+  let mut seen_idat = false
+  let mut seen_palette = false
+  let mut seen_transparency = false
+  let mut palette : Bytes? = None
+  let mut palette_entries = 0
+  let mut palette_alpha : Bytes? = None
   let mut transparent_gray : Int? = None
   let mut transparent_rgb : (Int, Int, Int)? = None
   for chunk in info.chunks {
-    if chunk.kind == "tRNS" {
-      if found {
+    if chunk.kind == "IDAT" {
+      seen_idat = true
+    } else if chunk.kind == "PLTE" {
+      if seen_idat {
+        return Err(InvalidChunkOrder("PLTE"))
+      }
+      if seen_palette {
+        return Err(DuplicatePalette)
+      }
+      seen_palette = true
+      if chunk.length == 0 || chunk.length > 768 || chunk.length % 3 != 0 {
+        return Err(InvalidPaletteLength(chunk.length))
+      }
+      if info.color_type == b'\x00' || info.color_type == b'\x04' {
+        return Err(UnexpectedPalette(info.color_type))
+      }
+      palette_entries = chunk.length / 3
+      if info.color_type == b'\x03' &&
+        palette_entries > 1 << info.bit_depth.to_int() {
+        return Err(PaletteTooLarge(palette_entries, info.bit_depth))
+      }
+      palette = Some(copy_bytes(data, chunk.data_offset, chunk.length))
+    } else if chunk.kind == "tRNS" {
+      if seen_idat {
+        return Err(InvalidChunkOrder("tRNS"))
+      }
+      if seen_transparency {
         return Err(DuplicateTransparency)
       }
-      found = true
+      seen_transparency = true
       if info.color_type == b'\x00' {
         if chunk.length != 2 {
           return Err(InvalidTransparency(info.color_type, chunk.length))
@@ -118,70 +172,141 @@ fn parse_transparency(
             read_uint16_be(data, chunk.data_offset + 4),
           ),
         )
+      } else if info.color_type == b'\x03' {
+        if !seen_palette || chunk.length == 0 || chunk.length > palette_entries {
+          return Err(InvalidTransparency(info.color_type, chunk.length))
+        }
+        palette_alpha = Some(copy_bytes(data, chunk.data_offset, chunk.length))
       } else {
         return Err(InvalidTransparency(info.color_type, chunk.length))
       }
     }
   }
-  Ok((transparent_gray, transparent_rgb))
+  if info.color_type == b'\x03' && !seen_palette {
+    return Err(MissingPalette)
+  }
+  Ok({ palette, palette_alpha, transparent_gray, transparent_rgb, })
+}
+
+///|
+fn packed_sample(
+  scanlines : Array[Byte],
+  row_start : Int,
+  x : Int,
+  bit_depth : Int,
+) -> Int {
+  let bit_offset = x * bit_depth
+  let byte = scanlines[row_start + bit_offset / 8].to_int()
+  let shift = 8 - bit_depth - bit_offset % 8
+  (byte >> shift) & ((1 << bit_depth) - 1)
 }
 
 ///|
 fn convert_to_rgba(
   scanlines : Array[Byte],
+  width : Int,
+  height : Int,
+  row_bytes : Int,
+  bit_depth : Byte,
   color_type : Byte,
-  transparent_gray : Int?,
-  transparent_rgb : (Int, Int, Int)?,
-) -> Bytes {
+  color_data : ColorData,
+) -> Result[Bytes, DecodeError] {
   let channels = channels_for_color_type(color_type)
-  let pixel_count = scanlines.length() / channels
+  let depth = bit_depth.to_int()
+  let pixel_count = width * height
   let rgba : Array[Byte] = []
   rgba.reserve_capacity(pixel_count * 4)
-  for pixel = 0; pixel < pixel_count; pixel = pixel + 1 {
-    let offset = pixel * channels
-    if color_type == b'\x00' {
-      let gray = scanlines[offset]
-      let alpha = match transparent_gray {
-        Some(sample) => if gray.to_int() == sample { b'\x00' } else { b'\xff' }
-        None => b'\xff'
-      }
-      rgba.push(gray)
-      rgba.push(gray)
-      rgba.push(gray)
-      rgba.push(alpha)
-    } else if color_type == b'\x02' {
-      let red = scanlines[offset]
-      let green = scanlines[offset + 1]
-      let blue = scanlines[offset + 2]
-      let alpha = match transparent_rgb {
-        Some((transparent_red, transparent_green, transparent_blue)) =>
-          if red.to_int() == transparent_red &&
-            green.to_int() == transparent_green &&
-            blue.to_int() == transparent_blue {
-            b'\x00'
-          } else {
-            b'\xff'
+  for y = 0; y < height; y = y + 1 {
+    let row_start = y * row_bytes
+    for x = 0; x < width; x = x + 1 {
+      if color_type == b'\x00' {
+        let sample = if depth == 8 {
+          scanlines[row_start + x].to_int()
+        } else {
+          packed_sample(scanlines, row_start, x, depth)
+        }
+        let gray = if depth == 8 {
+          sample
+        } else {
+          sample * 255 / ((1 << depth) - 1)
+        }
+        let alpha = match color_data.transparent_gray {
+          Some(transparent) =>
+            if sample == transparent {
+              b'\x00'
+            } else {
+              b'\xff'
+            }
+          None => b'\xff'
+        }
+        rgba.push(gray.to_byte())
+        rgba.push(gray.to_byte())
+        rgba.push(gray.to_byte())
+        rgba.push(alpha)
+      } else if color_type == b'\x03' {
+        let index = if depth == 8 {
+          scanlines[row_start + x].to_int()
+        } else {
+          packed_sample(scanlines, row_start, x, depth)
+        }
+        let palette = match color_data.palette {
+          Some(value) => value
+          None => return Err(MissingPalette)
+        }
+        let palette_offset = index * 3
+        if palette_offset + 2 >= palette.length() {
+          return Err(PaletteIndexOutOfRange(index, x, y))
+        }
+        rgba.push(palette.unsafe_get(palette_offset))
+        rgba.push(palette.unsafe_get(palette_offset + 1))
+        rgba.push(palette.unsafe_get(palette_offset + 2))
+        let alpha = match color_data.palette_alpha {
+          Some(values) =>
+            if index < values.length() {
+              values.unsafe_get(index)
+            } else {
+              b'\xff'
+            }
+          None => b'\xff'
+        }
+        rgba.push(alpha)
+      } else {
+        let offset = row_start + x * channels
+        if color_type == b'\x02' {
+          let red = scanlines[offset]
+          let green = scanlines[offset + 1]
+          let blue = scanlines[offset + 2]
+          let alpha = match color_data.transparent_rgb {
+            Some((transparent_red, transparent_green, transparent_blue)) =>
+              if red.to_int() == transparent_red &&
+                green.to_int() == transparent_green &&
+                blue.to_int() == transparent_blue {
+                b'\x00'
+              } else {
+                b'\xff'
+              }
+            None => b'\xff'
           }
-        None => b'\xff'
+          rgba.push(red)
+          rgba.push(green)
+          rgba.push(blue)
+          rgba.push(alpha)
+        } else if color_type == b'\x04' {
+          let gray = scanlines[offset]
+          rgba.push(gray)
+          rgba.push(gray)
+          rgba.push(gray)
+          rgba.push(scanlines[offset + 1])
+        } else {
+          rgba.push(scanlines[offset])
+          rgba.push(scanlines[offset + 1])
+          rgba.push(scanlines[offset + 2])
+          rgba.push(scanlines[offset + 3])
+        }
       }
-      rgba.push(red)
-      rgba.push(green)
-      rgba.push(blue)
-      rgba.push(alpha)
-    } else if color_type == b'\x04' {
-      let gray = scanlines[offset]
-      rgba.push(gray)
-      rgba.push(gray)
-      rgba.push(gray)
-      rgba.push(scanlines[offset + 1])
-    } else {
-      rgba.push(scanlines[offset])
-      rgba.push(scanlines[offset + 1])
-      rgba.push(scanlines[offset + 2])
-      rgba.push(scanlines[offset + 3])
     }
   }
-  Bytes::from_array(rgba)
+  Ok(Bytes::from_array(rgba))
 }
 
 ///|
@@ -208,11 +333,11 @@ fn collect_idat(
 }
 
 ///|
-/// Decode a non-interlaced, 8-bit PNG into row-major RGBA8 pixels.
+/// Decode a non-interlaced PNG into row-major RGBA8 pixels.
 ///
-/// Color types 0 (grayscale), 2 (truecolor), 4 (grayscale with alpha), and 6
-/// (truecolor with alpha) are supported. Grayscale and truecolor `tRNS`
-/// transparency is honored.
+/// Grayscale and indexed-color samples may use 1, 2, 4, or 8 bits. Truecolor,
+/// grayscale-alpha, and truecolor-alpha samples currently require 8 bits.
+/// `PLTE` palettes and applicable `tRNS` transparency are honored.
 pub fn decode(data : Bytes) -> Result[DecodedImage, DecodeError] {
   decode_with_limits(data, default_decode_limits())
 }
@@ -239,7 +364,7 @@ pub fn decode_with_limits(
     Ok(value) => value
     Err(error) => return Err(InvalidContainer(error))
   }
-  if info.bit_depth != b'\x08' {
+  if info.bit_depth == b'\x10' {
     return Err(UnsupportedBitDepth(info.bit_depth))
   }
   let channels = channels_for_color_type(info.color_type)
@@ -270,10 +395,11 @@ pub fn decode_with_limits(
   if pixel_count > 0x7fffffff / 4 {
     return Err(ImageTooLarge(info.width, info.height, limits.max_pixels))
   }
-  if width > 0x7fffffff / channels {
+  let pixel_bits = bits_per_pixel(info.bit_depth, info.color_type)
+  if pixel_bits == 0 || width > (0x7fffffff - 7) / pixel_bits {
     return Err(ImageTooLarge(info.width, info.height, limits.max_pixels))
   }
-  let row_bytes = width * channels
+  let row_bytes = (width * pixel_bits + 7) / 8
   if row_bytes >= 0x7fffffff || row_bytes + 1 > 0x7fffffff / height {
     return Err(ImageTooLarge(info.width, info.height, limits.max_pixels))
   }
@@ -282,8 +408,7 @@ pub fn decode_with_limits(
     return Err(OutputLimitExceeded(limits.max_inflated_size))
   }
 
-  let (transparent_gray, transparent_rgb) = match
-    parse_transparency(data, info) {
+  let color_data = match parse_color_data(data, info) {
     Ok(value) => value
     Err(error) => return Err(error)
   }
@@ -296,19 +421,24 @@ pub fn decode_with_limits(
     Ok(value) => value
     Err(error) => return Err(error)
   }
+  let filter_bytes_per_pixel = (pixel_bits + 7) / 8
   let scanlines = match
-    unfilter_scanlines(inflated, row_bytes, channels, height) {
+    unfilter_scanlines(inflated, row_bytes, filter_bytes_per_pixel, height) {
     Ok(value) => value
     Err(error) => return Err(error)
   }
-  Ok({
-    width: info.width,
-    height: info.height,
-    pixels: convert_to_rgba(
+  let pixels = match
+    convert_to_rgba(
       scanlines,
+      width,
+      height,
+      row_bytes,
+      info.bit_depth,
       info.color_type,
-      transparent_gray,
-      transparent_rgb,
-    ),
-  })
+      color_data,
+    ) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  Ok({ width: info.width, height: info.height, pixels, })
 }

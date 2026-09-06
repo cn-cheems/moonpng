@@ -133,17 +133,19 @@ fn stored_zlib_for_test(raw : Bytes) -> Bytes {
 }
 
 ///|
-fn png_with_idat_parts_for_test(
+fn png_custom_with_idat_parts_for_test(
   width : UInt,
   height : UInt,
+  bit_depth : Byte,
   color_type : Byte,
   idat_parts : Array[Bytes],
+  palette : Bytes?,
   transparency : Bytes?,
 ) -> Bytes {
   let ihdr : Array[Byte] = []
   append_uint32_be_for_test(ihdr, width)
   append_uint32_be_for_test(ihdr, height)
-  ihdr.push(b'\x08')
+  ihdr.push(bit_depth)
   ihdr.push(color_type)
   ihdr.push(b'\x00')
   ihdr.push(b'\x00')
@@ -151,6 +153,10 @@ fn png_with_idat_parts_for_test(
   let output : Array[Byte] = []
   append_bytes_for_test(output, b"\x89PNG\r\n\x1a\n")
   append_chunk_for_test(output, b"IHDR", Bytes::from_array(ihdr))
+  match palette {
+    Some(payload) => append_chunk_for_test(output, b"PLTE", payload)
+    None => ()
+  }
   match transparency {
     Some(payload) => append_chunk_for_test(output, b"tRNS", payload)
     None => ()
@@ -160,6 +166,25 @@ fn png_with_idat_parts_for_test(
   }
   append_chunk_for_test(output, b"IEND", b"")
   Bytes::from_array(output)
+}
+
+///|
+fn png_with_idat_parts_for_test(
+  width : UInt,
+  height : UInt,
+  color_type : Byte,
+  idat_parts : Array[Bytes],
+  transparency : Bytes?,
+) -> Bytes {
+  png_custom_with_idat_parts_for_test(
+    width,
+    height,
+    b'\x08',
+    color_type,
+    idat_parts,
+    None,
+    transparency,
+  )
 }
 
 ///|
@@ -175,6 +200,27 @@ fn png_for_test(
     height,
     color_type,
     [stored_zlib_for_test(scanlines)],
+    transparency,
+  )
+}
+
+///|
+fn png_custom_for_test(
+  width : UInt,
+  height : UInt,
+  bit_depth : Byte,
+  color_type : Byte,
+  scanlines : Bytes,
+  palette : Bytes?,
+  transparency : Bytes?,
+) -> Bytes {
+  png_custom_with_idat_parts_for_test(
+    width,
+    height,
+    bit_depth,
+    color_type,
+    [stored_zlib_for_test(scanlines)],
+    palette,
     transparency,
   )
 }
@@ -327,11 +373,183 @@ test "decode zlib stream split across consecutive IDAT chunks" {
 }
 
 ///|
-test "reject unsupported palette decoding" {
-  let png = png_for_test(1U, 1U, b'\x03', b"\x00\x00", None)
+test "decode packed grayscale samples" {
+  let one_bit = png_custom_for_test(
+    8U,
+    1U,
+    b'\x01',
+    b'\x00',
+    b"\x00\xb2",
+    None,
+    None,
+  )
+  match @moonpng.decode(one_bit) {
+    Ok(image) => {
+      @test.assert_eq(
+        image.pixel_at(0, 0),
+        Some({ red: b'\xff', green: b'\xff', blue: b'\xff', alpha: b'\xff', }),
+      )
+      @test.assert_eq(
+        image.pixel_at(1, 0),
+        Some({ red: b'\x00', green: b'\x00', blue: b'\x00', alpha: b'\xff', }),
+      )
+      @test.assert_eq(
+        image.pixel_at(7, 0),
+        Some({ red: b'\x00', green: b'\x00', blue: b'\x00', alpha: b'\xff', }),
+      )
+    }
+    Err(error) => fail(error.message())
+  }
+
+  let two_bit = png_custom_for_test(
+    4U,
+    1U,
+    b'\x02',
+    b'\x00',
+    b"\x00\x1b",
+    None,
+    Some(b"\x00\x02"),
+  )
+  match @moonpng.decode(two_bit) {
+    Ok(image) =>
+      @test.assert_eq(
+        image.pixels,
+        b"\x00\x00\x00\xff\x55\x55\x55\xff\xaa\xaa\xaa\x00\xff\xff\xff\xff",
+      )
+    Err(error) => fail(error.message())
+  }
+
+  let four_bit = png_custom_for_test(
+    3U,
+    1U,
+    b'\x04',
+    b'\x00',
+    b"\x00\x08\xf0",
+    None,
+    None,
+  )
+  match @moonpng.decode(four_bit) {
+    Ok(image) =>
+      @test.assert_eq(
+        image.pixels,
+        b"\x00\x00\x00\xff\x88\x88\x88\xff\xff\xff\xff\xff",
+      )
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "decode an indexed-color image with palette transparency" {
+  let palette = b"\xff\x00\x00\x00\xff\x00\x00\x00\xff\xff\xff\x00"
+  let png = png_custom_for_test(
+    4U,
+    1U,
+    b'\x02',
+    b'\x03',
+    b"\x00\x1b",
+    Some(palette),
+    Some(b"\xff\x80\x00"),
+  )
   match @moonpng.decode(png) {
-    Err(@moonpng.UnsupportedColorType(b'\x03')) => ()
-    _ => fail("expected UnsupportedColorType")
+    Ok(image) =>
+      @test.assert_eq(
+        image.pixels,
+        b"\xff\x00\x00\xff\x00\xff\x00\x80\x00\x00\xff\x00\xff\xff\x00\xff",
+      )
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "apply byte filters before unpacking samples" {
+  let png = png_custom_for_test(
+    16U,
+    1U,
+    b'\x01',
+    b'\x00',
+    b"\x01\xaa\x55",
+    None,
+    None,
+  )
+  match @moonpng.decode(png) {
+    Ok(image) => {
+      @test.assert_eq(
+        image.pixel_at(0, 0),
+        Some({ red: b'\xff', green: b'\xff', blue: b'\xff', alpha: b'\xff', }),
+      )
+      @test.assert_eq(
+        image.pixel_at(1, 0),
+        Some({ red: b'\x00', green: b'\x00', blue: b'\x00', alpha: b'\xff', }),
+      )
+      @test.assert_eq(
+        image.pixel_at(8, 0),
+        Some({ red: b'\xff', green: b'\xff', blue: b'\xff', alpha: b'\xff', }),
+      )
+      @test.assert_eq(
+        image.pixel_at(15, 0),
+        Some({ red: b'\xff', green: b'\xff', blue: b'\xff', alpha: b'\xff', }),
+      )
+    }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "reject indexed-color metadata errors" {
+  let missing = png_custom_for_test(
+    1U,
+    1U,
+    b'\x02',
+    b'\x03',
+    b"\x00\x00",
+    None,
+    None,
+  )
+  match @moonpng.decode(missing) {
+    Err(@moonpng.MissingPalette) => ()
+    _ => fail("expected MissingPalette")
+  }
+
+  let too_large = png_custom_for_test(
+    1U,
+    1U,
+    b'\x01',
+    b'\x03',
+    b"\x00\x00",
+    Some(b"\x00\x00\x00\x11\x11\x11\x22\x22\x22"),
+    None,
+  )
+  match @moonpng.decode(too_large) {
+    Err(@moonpng.PaletteTooLarge(3, b'\x01')) => ()
+    _ => fail("expected PaletteTooLarge")
+  }
+
+  let bad_alpha = png_custom_for_test(
+    1U,
+    1U,
+    b'\x02',
+    b'\x03',
+    b"\x00\x00",
+    Some(b"\xff\x00\x00"),
+    Some(b"\xff\x80"),
+  )
+  match @moonpng.decode(bad_alpha) {
+    Err(@moonpng.InvalidTransparency(b'\x03', 2)) => ()
+    _ => fail("expected InvalidTransparency")
+  }
+
+  let bad_index = png_custom_for_test(
+    1U,
+    1U,
+    b'\x02',
+    b'\x03',
+    b"\x00\x40",
+    Some(b"\xff\x00\x00"),
+    None,
+  )
+  match @moonpng.decode(bad_index) {
+    Err(@moonpng.PaletteIndexOutOfRange(1, 0, 0)) => ()
+    _ => fail("expected PaletteIndexOutOfRange")
   }
 }
 

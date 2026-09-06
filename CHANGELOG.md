@@ -12,4 +12,8 @@
 - Added all five PNG scanline filters and RGBA8 pixel output.
 - Added non-interlaced 8-bit grayscale, truecolor, grayscale-alpha, and RGBA
   decoding, including grayscale and truecolor `tRNS` transparency.
+- Added indexed-color decoding with validated `PLTE` palettes and palette
+  `tRNS` transparency.
+- Added 1-, 2-, and 4-bit packed grayscale and indexed-color decoding, including
+  row padding, byte-oriented filtering, and grayscale sample scaling.
 - Added a decoded-pixel CLI demo and decoder design documentation.
