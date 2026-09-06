@@ -886,6 +886,108 @@ test "encode a zlib stream across consecutive IDAT chunks" {
 }
 
 ///|
+test "encode rows into bounded PNG fragments" {
+  let rows : Array[Bytes] = [
+    b"\xff\x00\x00\x00\xff\x00\x00\x00\xff", b"\xff\xff\xff\x00\x00\x00\x80\x40\x20",
+  ]
+  let fragments : Array[Bytes] = []
+  match
+    @moonpng.encode_rows_with_options(
+      3U,
+      2U,
+      @moonpng.PixelRgb8,
+      @moonpng.default_encode_options(),
+      7,
+      row => rows[row],
+      fragment => fragments.push(fragment),
+    ) {
+    Ok(_) => {
+      @test.assert_eq(fragments[0], b"\x89PNG\r\n\x1a\n")
+      @test.assert_eq(fragments.length() > 4, true)
+      let output : Array[Byte] = []
+      for fragment in fragments {
+        append_bytes_for_test(output, fragment)
+      }
+      let png = Bytes::from_array(output)
+      match @moonpng.inspect(png) {
+        Ok(info) => {
+          let mut idat_count = 0
+          for chunk in info.chunks {
+            if chunk.kind == "IDAT" {
+              idat_count = idat_count + 1
+              @test.assert_eq(chunk.length <= 7, true)
+            }
+          }
+          @test.assert_eq(idat_count > 1, true)
+        }
+        Err(error) => fail(error.message())
+      }
+      let expected = b"\xff\x00\x00\xff\x00\xff\x00\xff" +
+        b"\x00\x00\xff\xff\xff\xff\xff\xff" +
+        b"\x00\x00\x00\xff\x80\x40\x20\xff"
+      match @moonpng.decode(png) {
+        Ok(image) => @test.assert_eq(image.pixels, expected)
+        Err(error) => fail(error.message())
+      }
+    }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "encode a wide row across stored blocks" {
+  let source = Array::make(21846 * 3, b'\x00')
+  for index = 0; index < source.length(); index = index + 1 {
+    source[index] = (index * 13 + 5).to_byte()
+  }
+  let pixels = Bytes::from_array(source)
+  let fragments : Array[Bytes] = []
+  let options : @moonpng.EncodeOptions = {
+    filter_strategy: @moonpng.FilterNone,
+  }
+  match
+    @moonpng.encode_rows_with_options(
+      21846U,
+      1U,
+      @moonpng.PixelRgb8,
+      options,
+      4096,
+      _ => pixels,
+      fragment => fragments.push(fragment),
+    ) {
+    Ok(_) => {
+      let output : Array[Byte] = []
+      for fragment in fragments {
+        append_bytes_for_test(output, fragment)
+      }
+      match @moonpng.decode(Bytes::from_array(output)) {
+        Ok(image) => {
+          @test.assert_eq(image.width, 21846U)
+          @test.assert_eq(image.pixels.length(), 21846 * 4)
+          @test.assert_eq(image.pixels[0], pixels[0])
+          @test.assert_eq(image.pixels[21845 * 4 + 2], pixels[21845 * 3 + 2])
+        }
+        Err(error) => fail(error.message())
+      }
+    }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "reject an invalid row from the encoder provider" {
+  let fragments : Array[Bytes] = []
+  match
+    @moonpng.encode_rows(2U, 1U, @moonpng.PixelGray8, _ => b"\x01", fragment => {
+      fragments.push(fragment)
+    }) {
+    Err(@moonpng.EncodeRowLengthMismatch(0, 2, 1)) =>
+      @test.assert_eq(fragments.length(), 2)
+    _ => fail("expected EncodeRowLengthMismatch")
+  }
+}
+
+///|
 test "reject invalid RGBA8 encode input" {
   match @moonpng.encode_rgba8(0U, 1U, b"") {
     Err(@moonpng.EncodeInvalidDimensions(0U, 1U)) => ()

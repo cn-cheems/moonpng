@@ -26,6 +26,13 @@ fn encode_append_chunk(
 }
 
 ///|
+fn encode_chunk_bytes(kind : Bytes, payload : Bytes) -> Bytes {
+  let output : Array[Byte] = []
+  encode_append_chunk(output, kind, payload)
+  Bytes::from_array(output)
+}
+
+///|
 fn encode_copy_range(data : Bytes, offset : Int, length : Int) -> Bytes {
   let output : Array[Byte] = []
   output.reserve_capacity(length)
@@ -72,32 +79,31 @@ fn encode_filter_code(strategy : FilterStrategy) -> Byte {
 
 ///|
 fn encode_filter_row(
-  pixels : Bytes,
-  row_start : Int,
-  row_bytes : Int,
+  row : Bytes,
+  previous_row : Bytes?,
   bytes_per_pixel : Int,
-  has_previous_row : Bool,
   filter : Byte,
 ) -> Array[Byte] {
-  let output = Array::make(row_bytes, b'\x00')
-  for column = 0; column < row_bytes; column = column + 1 {
-    let source = pixels.unsafe_get(row_start + column).to_int()
+  let output = Array::make(row.length(), b'\x00')
+  for column = 0; column < row.length(); column = column + 1 {
+    let source = row.unsafe_get(column).to_int()
     let left = if column >= bytes_per_pixel {
-      pixels.unsafe_get(row_start + column - bytes_per_pixel).to_int()
+      row.unsafe_get(column - bytes_per_pixel).to_int()
     } else {
       0
     }
-    let above = if has_previous_row {
-      pixels.unsafe_get(row_start + column - row_bytes).to_int()
-    } else {
-      0
+    let above = match previous_row {
+      Some(previous) => previous.unsafe_get(column).to_int()
+      None => 0
     }
-    let upper_left = if has_previous_row && column >= bytes_per_pixel {
-      pixels
-      .unsafe_get(row_start + column - row_bytes - bytes_per_pixel)
-      .to_int()
-    } else {
-      0
+    let upper_left = match previous_row {
+      Some(previous) =>
+        if column >= bytes_per_pixel {
+          previous.unsafe_get(column - bytes_per_pixel).to_int()
+        } else {
+          0
+        }
+      None => 0
     }
     let predictor = match filter.to_int() {
       0 => 0
@@ -128,32 +134,23 @@ fn encode_filter_score(row : Array[Byte]) -> Int {
 
 ///|
 fn encode_choose_filter(
-  pixels : Bytes,
-  row_start : Int,
-  row_bytes : Int,
+  row : Bytes,
+  previous_row : Bytes?,
   bytes_per_pixel : Int,
-  has_previous_row : Bool,
   strategy : FilterStrategy,
 ) -> (Byte, Array[Byte]) {
   if strategy != FilterAdaptive {
     let code = encode_filter_code(strategy)
-    return (
-      code,
-      encode_filter_row(
-        pixels, row_start, row_bytes, bytes_per_pixel, has_previous_row, code,
-      ),
-    )
+    return (code, encode_filter_row(row, previous_row, bytes_per_pixel, code))
   }
   let mut best_code = b'\x00'
   let mut best_row = encode_filter_row(
-    pixels, row_start, row_bytes, bytes_per_pixel, has_previous_row, best_code,
+    row, previous_row, bytes_per_pixel, best_code,
   )
   let mut best_score = encode_filter_score(best_row)
   for code_value = 1; code_value <= 4; code_value = code_value + 1 {
     let code = code_value.to_byte()
-    let candidate = encode_filter_row(
-      pixels, row_start, row_bytes, bytes_per_pixel, has_previous_row, code,
-    )
+    let candidate = encode_filter_row(row, previous_row, bytes_per_pixel, code)
     let score = encode_filter_score(candidate)
     if score < best_score {
       best_code = code
@@ -182,6 +179,196 @@ fn encode_color_type(format : PixelFormat) -> Byte {
     PixelRgb8 => b'\x02'
     PixelRgba8 => b'\x06'
   }
+}
+
+///|
+fn encode_ihdr_payload(
+  width : UInt,
+  height : UInt,
+  format : PixelFormat,
+) -> Bytes {
+  let ihdr : Array[Byte] = []
+  encode_append_uint32_be(ihdr, width)
+  encode_append_uint32_be(ihdr, height)
+  ihdr.push(b'\x08')
+  ihdr.push(encode_color_type(format))
+  ihdr.push(b'\x00')
+  ihdr.push(b'\x00')
+  ihdr.push(b'\x00')
+  Bytes::from_array(ihdr)
+}
+
+///|
+fn encode_emit_idat_byte(
+  payload : Array[Byte],
+  limit : Int,
+  emit : (Bytes) -> Unit,
+  value : Byte,
+) -> Unit {
+  payload.push(value)
+  if payload.length() == limit {
+    emit(encode_chunk_bytes(b"IDAT", Bytes::from_array(payload)))
+    payload.clear()
+  }
+}
+
+///|
+fn encode_update_adler(value : UInt, byte : Byte) -> UInt {
+  let sum = value & 0xffffU
+  let weighted = value >> 16
+  let next_sum = (sum + byte.to_uint()) % 65521U
+  let next_weighted = (weighted + next_sum) % 65521U
+  (next_weighted << 16) | next_sum
+}
+
+///|
+/// Encode an image from a row provider and emit bounded PNG fragments.
+///
+/// The callback receives the PNG signature followed by complete IHDR, IDAT,
+/// and IEND chunks. Only the current row, previous row, filter candidates, and
+/// one IDAT payload are retained. A row-length error can therefore be reported
+/// after earlier fragments have already been emitted.
+pub fn encode_rows_with_options(
+  width : UInt,
+  height : UInt,
+  format : PixelFormat,
+  options : EncodeOptions,
+  idat_chunk_size : Int,
+  row_at : (Int) -> Bytes,
+  emit : (Bytes) -> Unit,
+) -> Result[Unit, EncodeError] {
+  if idat_chunk_size <= 0 {
+    return Err(EncodeInvalidIdatChunkSize(idat_chunk_size))
+  }
+  if width == 0U || height == 0U {
+    return Err(EncodeInvalidDimensions(width, height))
+  }
+  if width > 0x7fffffffU || height > 0x7fffffffU {
+    return Err(EncodeImageTooLarge(width, height))
+  }
+  let width_int = width.reinterpret_as_int()
+  let height_int = height.reinterpret_as_int()
+  let channels = encode_pixel_channels(format)
+  if width_int > 0x7fffffff / channels {
+    return Err(EncodeImageTooLarge(width, height))
+  }
+  let row_bytes = width_int * channels
+
+  emit(b"\x89PNG\r\n\x1a\n")
+  emit(encode_chunk_bytes(b"IHDR", encode_ihdr_payload(width, height, format)))
+
+  let idat_payload : Array[Byte] = []
+  let mut adler = 1U
+  encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, b'\x78')
+  encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, b'\x01')
+  let mut previous_row : Bytes? = None
+  for row_index = 0; row_index < height_int; row_index = row_index + 1 {
+    let row = row_at(row_index)
+    if row.length() != row_bytes {
+      return Err(EncodeRowLengthMismatch(row_index, row_bytes, row.length()))
+    }
+    let (filter, filtered) = encode_choose_filter(
+      row,
+      previous_row,
+      channels,
+      options.filter_strategy,
+    )
+    let scanline_length = row_bytes + 1
+    let mut scanline_offset = 0
+    while scanline_offset < scanline_length {
+      let remaining = scanline_length - scanline_offset
+      let block_length = if remaining > 65535 { 65535 } else { remaining }
+      let is_final = row_index + 1 == height_int &&
+        scanline_offset + block_length == scanline_length
+      encode_emit_idat_byte(
+        idat_payload,
+        idat_chunk_size,
+        emit,
+        if is_final {
+          b'\x01'
+        } else {
+          b'\x00'
+        },
+      )
+      encode_emit_idat_byte(
+        idat_payload,
+        idat_chunk_size,
+        emit,
+        block_length.to_byte(),
+      )
+      encode_emit_idat_byte(
+        idat_payload,
+        idat_chunk_size,
+        emit,
+        (block_length >> 8).to_byte(),
+      )
+      let inverse = block_length ^ 0xffff
+      encode_emit_idat_byte(
+        idat_payload,
+        idat_chunk_size,
+        emit,
+        inverse.to_byte(),
+      )
+      encode_emit_idat_byte(
+        idat_payload,
+        idat_chunk_size,
+        emit,
+        (inverse >> 8).to_byte(),
+      )
+      for index = 0; index < block_length; index = index + 1 {
+        let position = scanline_offset + index
+        let byte = if position == 0 { filter } else { filtered[position - 1] }
+        encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, byte)
+        adler = encode_update_adler(adler, byte)
+      }
+      scanline_offset = scanline_offset + block_length
+    }
+    previous_row = Some(row)
+  }
+  encode_emit_idat_byte(
+    idat_payload,
+    idat_chunk_size,
+    emit,
+    (adler >> 24).to_byte(),
+  )
+  encode_emit_idat_byte(
+    idat_payload,
+    idat_chunk_size,
+    emit,
+    (adler >> 16).to_byte(),
+  )
+  encode_emit_idat_byte(
+    idat_payload,
+    idat_chunk_size,
+    emit,
+    (adler >> 8).to_byte(),
+  )
+  encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, adler.to_byte())
+  if idat_payload.length() > 0 {
+    emit(encode_chunk_bytes(b"IDAT", Bytes::from_array(idat_payload)))
+  }
+  emit(encode_chunk_bytes(b"IEND", b""))
+  Ok(())
+}
+
+///|
+/// Encode rows with adaptive filtering and 64 KiB maximum IDAT payloads.
+pub fn encode_rows(
+  width : UInt,
+  height : UInt,
+  format : PixelFormat,
+  row_at : (Int) -> Bytes,
+  emit : (Bytes) -> Unit,
+) -> Result[Unit, EncodeError] {
+  encode_rows_with_options(
+    width,
+    height,
+    format,
+    default_encode_options(),
+    65536,
+    row_at,
+    emit,
+  )
 }
 
 ///|
@@ -232,30 +419,22 @@ pub fn encode_with_idat_chunk_size(
   let raw : Array[Byte] = []
   raw.reserve_capacity(raw_length)
   let row_bytes = width_int * channels
+  let mut previous_row : Bytes? = None
   for row = 0; row < height_int; row = row + 1 {
     let row_start = row * row_bytes
+    let current_row = encode_copy_range(pixels, row_start, row_bytes)
     let (filter, filtered) = encode_choose_filter(
-      pixels,
-      row_start,
-      row_bytes,
+      current_row,
+      previous_row,
       channels,
-      row > 0,
       options.filter_strategy,
     )
     raw.push(filter)
     for byte in filtered {
       raw.push(byte)
     }
+    previous_row = Some(current_row)
   }
-
-  let ihdr : Array[Byte] = []
-  encode_append_uint32_be(ihdr, width)
-  encode_append_uint32_be(ihdr, height)
-  ihdr.push(b'\x08')
-  ihdr.push(encode_color_type(format))
-  ihdr.push(b'\x00')
-  ihdr.push(b'\x00')
-  ihdr.push(b'\x00')
 
   let compressed = encode_stored_zlib(Bytes::from_array(raw))
   let idat_count = (compressed.length() - 1) / idat_chunk_size + 1
@@ -265,7 +444,11 @@ pub fn encode_with_idat_chunk_size(
   }
   let output : Array[Byte] = []
   encode_append_bytes(output, b"\x89PNG\r\n\x1a\n")
-  encode_append_chunk(output, b"IHDR", Bytes::from_array(ihdr))
+  encode_append_chunk(
+    output,
+    b"IHDR",
+    encode_ihdr_payload(width, height, format),
+  )
   let mut compressed_offset = 0
   while compressed_offset < compressed.length() {
     let remaining = compressed.length() - compressed_offset

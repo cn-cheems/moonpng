@@ -24,6 +24,10 @@ pub fn encode_rgba8(UInt, UInt, Bytes) -> Result[Bytes, EncodeError]
 
 pub fn encode_rgba8_with_options(UInt, UInt, Bytes, EncodeOptions) -> Result[Bytes, EncodeError]
 
+pub fn encode_rows(UInt, UInt, PixelFormat, (Int) -> Bytes, (Bytes) -> Unit) -> Result[Unit, EncodeError]
+
+pub fn encode_rows_with_options(UInt, UInt, PixelFormat, EncodeOptions, Int, (Int) -> Bytes, (Bytes) -> Unit) -> Result[Unit, EncodeError]
+
 pub fn encode_with_idat_chunk_size(UInt, UInt, PixelFormat, Bytes, EncodeOptions, Int) -> Result[Bytes, EncodeError]
 
 pub fn encode_with_options(UInt, UInt, PixelFormat, Bytes, EncodeOptions) -> Result[Bytes, EncodeError]
@@ -108,6 +112,7 @@ pub(all) enum EncodeError {
   EncodeInvalidDimensions(UInt, UInt)
   EncodeImageTooLarge(UInt, UInt)
   EncodePixelLengthMismatch(Int, Int)
+  EncodeRowLengthMismatch(Int, Int, Int)
   EncodeInvalidIdatChunkSize(Int)
 } derive(Eq, @debug.Debug)
 pub fn EncodeError::message(Self) -> String

@@ -27,6 +27,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
   pixels using their native PNG color types;
 - offers fixed and adaptive selection across all five PNG row filters;
 - splits zlib output across caller-sized consecutive IDAT chunks;
+- encodes row-provided images into bounded output fragments without retaining
+  the complete source image or compressed stream;
 - runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
 ## Quick start
@@ -85,6 +87,27 @@ to avoid storing channels that an image does not need.
 continuous zlib stream. This is useful when a writer or transport prefers
 smaller independently checksummed PNG chunks.
 
+For images that should not be held in one pixel buffer, `encode_rows` requests
+one row at a time and passes the PNG signature and each complete chunk to an
+output callback:
+
+```moonbit
+let rows = [b"\xff\x00\x00", b"\x00\x00\xff"]
+let fragments : Array[Bytes] = []
+let result = @moonpng.encode_rows(
+  1U,
+  2U,
+  @moonpng.PixelRgb8,
+  row => rows[row],
+  fragment => fragments.push(fragment),
+)
+```
+
+`encode_rows_with_options` also accepts a filter strategy and maximum IDAT
+payload size. Its working memory is bounded by the row width and IDAT limit,
+not image height. Because output is progressive, a bad row can be reported
+after the signature or earlier chunks have already reached the callback.
+
 ## Inspect without decoding
 
 Use `inspect` when only container metadata and chunk information are needed:
@@ -129,8 +152,8 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add a bounded incremental encoder interface.
-2. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
+1. Add a browser demo and downloadable round-trip examples.
+2. Add conformance fixtures, fuzzing, and benchmarks.
 
 ## Project status
 

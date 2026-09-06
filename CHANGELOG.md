@@ -28,4 +28,6 @@
   RGBA, with native PNG color types and round-trip coverage.
 - Added configurable IDAT payload sizing with consecutive multi-chunk output,
   per-chunk CRC validation, and decoder round-trip coverage.
+- Added row-oriented encoding with bounded IDAT fragments, incremental Adler-32,
+  cross-block scanline handling, and explicit row-length validation.
 - Added a decoded-pixel CLI demo and decoder design documentation.

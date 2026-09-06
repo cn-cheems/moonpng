@@ -60,6 +60,15 @@ IHDR, IDAT, and IEND chunks with CRC-32 values. Callers may bound IDAT payloads;
 the zlib stream is split at byte boundaries and the chunks remain consecutive.
 The same input and options always produce the same PNG bytes.
 
+`encode_rows_with_options` is the bounded counterpart for generated or large
+images. It pulls one exact-length row at a time, retains only that row and its
+predecessor for filtering, and writes stored DEFLATE blocks directly into a
+caller-sized IDAT payload buffer. Adler-32 is updated as filtered bytes pass
+through, so neither the full pixel input, filtered image, nor zlib stream is
+materialized. The output callback receives the PNG signature and complete PNG
+chunks in order. If a later row has the wrong length, the function returns an
+error but does not retract fragments already delivered to the callback.
+
 ## Security invariants
 
 - No chunk payload is read before its declared range and CRC are validated.
@@ -70,6 +79,8 @@ The same input and options always produce the same PNG bytes.
 - The inflated byte count must exactly match the expected scanline layout.
 - Every Adam7 pass is bounded before slicing or allocating its scanlines.
 - Palette indices are checked before color or alpha entries are accessed.
+- Row-oriented encoding retains memory proportional to row width and the
+  configured IDAT payload limit, independent of image height.
 - Unsupported formats fail explicitly rather than producing approximate pixels.
 
 ## Portability
