@@ -6,7 +6,19 @@ import {
 }
 
 // Values
+pub fn adler32(Bytes) -> UInt
+
 pub fn crc32(Bytes) -> UInt
+
+pub fn decode(Bytes) -> Result[DecodedImage, DecodeError]
+
+pub fn decode_with_limits(Bytes, DecodeLimits) -> Result[DecodedImage, DecodeError]
+
+pub fn default_decode_limits() -> DecodeLimits
+
+pub fn inflate_zlib(Bytes) -> Result[Bytes, DecodeError]
+
+pub fn inflate_zlib_with_limit(Bytes, max_output_size~ : Int) -> Result[Bytes, DecodeError]
 
 pub fn inspect(Bytes) -> Result[PngInfo, PngError]
 
@@ -26,6 +38,52 @@ pub(all) struct ChunkInfo {
   is_private : Bool
   is_safe_to_copy : Bool
 } derive(Eq, @debug.Debug)
+
+pub(all) enum DecodeError {
+  InvalidContainer(PngError)
+  InvalidDecodeLimits
+  ImageTooLarge(UInt, UInt, Int)
+  CompressedDataTooLarge(Int)
+  UnsupportedBitDepth(Byte)
+  UnsupportedColorType(Byte)
+  UnsupportedInterlace(Byte)
+  MissingIdatData
+  InvalidZlibHeader
+  UnsupportedPresetDictionary
+  TruncatedDeflate
+  InvalidDeflateBlockType(Int)
+  InvalidStoredBlockLength
+  InvalidHuffmanTree
+  InvalidHuffmanCode
+  InvalidCodeLengthRepeat
+  InvalidLengthSymbol(Int)
+  InvalidDistanceSymbol(Int)
+  InvalidBackReference(Int, Int)
+  OutputLimitExceeded(Int)
+  TrailingDeflateData(Int)
+  AdlerMismatch(UInt, UInt)
+  InvalidInflatedSize(Int, Int)
+  InvalidFilter(Byte, Int)
+  UnsupportedCriticalChunk(String)
+  DuplicateTransparency
+  InvalidTransparency(Byte, Int)
+} derive(Eq, @debug.Debug)
+pub fn DecodeError::message(Self) -> String
+
+pub(all) struct DecodeLimits {
+  max_chunk_size : Int
+  max_chunks : Int
+  max_compressed_size : Int
+  max_inflated_size : Int
+  max_pixels : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct DecodedImage {
+  width : UInt
+  height : UInt
+  pixels : Bytes
+} derive(Eq, @debug.Debug)
+pub fn DecodedImage::pixel_at(Self, Int, Int) -> Rgba8?
 
 pub(all) enum PngError {
   InputTooShort(Int)
@@ -49,6 +107,7 @@ pub(all) enum PngError {
   InvalidInterlaceMethod(Byte)
   MissingIhdr
   MissingIdat
+  NonConsecutiveIdat(Int)
   InvalidIendLength(Int)
   MissingIend
   TrailingData(Int)
@@ -64,6 +123,13 @@ pub(all) struct PngInfo {
   filter_method : Byte
   interlace_method : Byte
   chunks : Array[ChunkInfo]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Rgba8 {
+  red : Byte
+  green : Byte
+  blue : Byte
+  alpha : Byte
 } derive(Eq, @debug.Debug)
 
 // Type aliases

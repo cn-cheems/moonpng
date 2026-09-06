@@ -1,25 +1,28 @@
 # MoonPNG
 
-MoonPNG is a pure MoonBit PNG parser, validator, and codec toolkit in progress.
-The first working milestone provides a strict, resource-bounded PNG container
-inspector with no external runtime dependency.
+MoonPNG is a pure MoonBit PNG parser and decoder. It validates the PNG
+container, inflates zlib/DEFLATE image data, reverses PNG scanline filters, and
+returns portable RGBA8 pixels without FFI or platform-specific dependencies.
 
 Repository: <https://github.com/cn-cheems/moonpng>
 
-## Working MVP
+## Current capabilities
 
-- validates the 8-byte PNG signature;
-- parses PNG chunks with overflow and bounds checks;
-- validates chunk names, the reserved bit, and CRC-32;
-- validates IHDR dimensions, color/bit-depth combinations, compression, filter,
-  and interlace methods;
-- enforces IHDR/IDAT/IEND structural requirements;
-- exposes chunk flags and image metadata through a reusable MoonBit API;
-- offers configurable limits for chunk size and chunk count;
-- runs on MoonBit's Wasm GC backend without FFI.
+- validates the PNG signature, chunk bounds, names, ordering, and CRC-32;
+- applies resource limits to chunk count, compressed data, inflated data, and
+  pixel count;
+- implements zlib header and Adler-32 validation;
+- inflates stored, fixed-Huffman, and dynamic-Huffman DEFLATE blocks;
+- rejects malformed Huffman trees, invalid back-references, truncated input,
+  output-limit violations, and trailing compressed bytes;
+- reverses all five PNG scanline filters: None, Sub, Up, Average, and Paeth;
+- decodes non-interlaced, 8-bit color types 0, 2, 4, and 6;
+- supports `tRNS` transparency for grayscale and truecolor images;
+- converts decoded output to row-major RGBA8;
+- runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
-Pixel decompression and encoding are planned work. The current API deliberately
-does not claim to decode IDAT image data.
+Palette images, sub-byte and 16-bit samples, and Adam7 interlacing are planned
+work and currently return explicit unsupported-feature errors.
 
 ## Quick start
 
@@ -32,15 +35,32 @@ moon run cmd/main
 Expected demo output:
 
 ```text
-MoonPNG structural inspection demo
-image: 1x1, bit_depth=8, color_type=6
-chunks: 3
-- IHDR offset=8 length=13 crc=ok critical=true
-- IDAT offset=33 length=0 crc=ok critical=true
-- IEND offset=45 length=0 crc=ok critical=true
+MoonPNG decode demo
+image: 1x1, format=RGBA8
+pixel(0, 0): rgba(255, 0, 0, 255)
 ```
 
-## Library usage
+## Decode an image
+
+```moonbit
+match @moonpng.decode(png_bytes) {
+  Ok(image) => {
+    println("decoded: \{image.width}x\{image.height}")
+    match image.pixel_at(0, 0) {
+      Some(pixel) => println("red channel: \{pixel.red.to_uint()}")
+      None => ()
+    }
+  }
+  Err(error) => println(error.message())
+}
+```
+
+`DecodedImage.pixels` stores four bytes per pixel in red, green, blue, alpha
+order. Rows are contiguous from top to bottom.
+
+## Inspect without decoding
+
+Use `inspect` when only container metadata and chunk information are needed:
 
 ```moonbit
 match @moonpng.inspect(png_bytes) {
@@ -49,30 +69,50 @@ match @moonpng.inspect(png_bytes) {
 }
 ```
 
-For untrusted input, tune the resource limits explicitly:
+## Resource limits
+
+The default decoder uses conservative bounds suitable for ordinary images.
+Applications can choose tighter limits for untrusted uploads:
 
 ```moonbit
-let result = @moonpng.inspect_with_limits(
-  png_bytes,
-  max_chunk_size=8 * 1024 * 1024,
-  max_chunks=1024,
-)
+let limits : @moonpng.DecodeLimits = {
+  max_chunk_size: 8 * 1024 * 1024,
+  max_chunks: 1024,
+  max_compressed_size: 16 * 1024 * 1024,
+  max_inflated_size: 32 * 1024 * 1024,
+  max_pixels: 8 * 1024 * 1024,
+}
+let result = @moonpng.decode_with_limits(png_bytes, limits)
 ```
+
+The zlib layer is also reusable on its own through `inflate_zlib` and
+`inflate_zlib_with_limit`.
+
+## Architecture
+
+The decode pipeline has four bounded stages:
+
+1. inspect and validate the PNG container;
+2. concatenate consecutive IDAT payloads;
+3. inflate the zlib stream and verify Adler-32;
+4. reverse row filters and convert samples to RGBA8.
+
+See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add real file input to `moonpng inspect` and more metadata chunks.
-2. Implement zlib/deflate integration and scanline unfiltering.
-3. Decode PNG color types 0/2/3/4/6 and `tRNS` transparency.
-4. Add Adam7 interlace reconstruction.
-5. Add deterministic encoding, a browser demo, conformance fixtures, fuzzing,
-   and benchmarks.
+1. Decode indexed-color PNGs with PLTE and palette `tRNS`.
+2. Decode 1/2/4-bit packed samples and 16-bit samples.
+3. Add Adam7 interlace reconstruction.
+4. Add deterministic PNG encoding and streaming interfaces.
+5. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
 
 ## Project status
 
 This repository is being developed for the 2026 MoonBit open-source ecosystem
-competition. The implementation is original MoonBit code based on the public
-PNG specification. See [SOURCES.md](SOURCES.md) for provenance notes.
+competition. The implementation is original MoonBit code based on public PNG,
+zlib, and DEFLATE specifications. See [SOURCES.md](SOURCES.md) for provenance
+notes.
 
 ## License
 

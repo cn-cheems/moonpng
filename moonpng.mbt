@@ -49,6 +49,7 @@ pub(all) enum PngError {
   InvalidInterlaceMethod(Byte)
   MissingIhdr
   MissingIdat
+  NonConsecutiveIdat(Int)
   InvalidIendLength(Int)
   MissingIend
   TrailingData(Int)
@@ -90,6 +91,8 @@ pub fn PngError::message(self : PngError) -> String {
     InvalidInterlaceMethod(value) => "unsupported PNG interlace method \{value}"
     MissingIhdr => "PNG is missing its IHDR chunk"
     MissingIdat => "PNG is missing image data (IDAT)"
+    NonConsecutiveIdat(offset) =>
+      "IDAT chunks must be consecutive; another IDAT appears at byte \{offset}"
     InvalidIendLength(length) => "IEND length must be zero, got \{length}"
     MissingIend => "PNG is missing its IEND chunk"
     TrailingData(offset) => "unexpected data follows IEND at byte \{offset}"
@@ -194,6 +197,7 @@ pub fn inspect_with_limits(
   let mut offset = png_signature.length()
   let mut seen_ihdr = false
   let mut seen_idat = false
+  let mut idat_finished = false
   let mut seen_iend = false
   let mut width = 0U
   let mut height = 0U
@@ -277,12 +281,18 @@ pub fn inspect_with_limits(
         return Err(InvalidInterlaceMethod(interlace_method))
       }
     } else if kind == "IDAT" {
+      if idat_finished {
+        return Err(NonConsecutiveIdat(offset))
+      }
       seen_idat = true
     } else if kind == "IEND" {
       if length != 0 {
         return Err(InvalidIendLength(length))
       }
       seen_iend = true
+    }
+    if seen_idat && kind != "IDAT" {
+      idat_finished = true
     }
 
     chunks.push({
