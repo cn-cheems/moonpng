@@ -315,6 +315,56 @@ test "decode four common 8-bit PNG color types" {
 }
 
 ///|
+test "decode 16-bit PNG color types" {
+  let cases : Array[(Byte, Bytes, Bytes, Bytes?)] = [
+    (b'\x00', b"\x00\x12\x34", b"\x12\x12\x12\x00", Some(b"\x12\x34")),
+    (
+      b'\x02',
+      b"\x00\x12\x34\x56\x78\x9a\xbc",
+      b"\x12\x56\x9a\x00",
+      Some(b"\x12\x34\x56\x78\x9a\xbc"),
+    ),
+    (b'\x04', b"\x00\x44\x55\x66\x77", b"\x44\x44\x44\x66", None),
+    (
+      b'\x06',
+      b"\x00\x11\x22\x33\x44\x55\x66\x77\x88",
+      b"\x11\x33\x55\x77",
+      None,
+    ),
+  ]
+  for item in cases {
+    let (color_type, scanline, expected, transparency) = item
+    let png = png_custom_for_test(
+      1U,
+      1U,
+      b'\x10',
+      color_type,
+      scanline,
+      None,
+      transparency,
+    )
+    match @moonpng.decode(png) {
+      Ok(image) => @test.assert_eq(image.pixels, expected)
+      Err(error) => fail(error.message())
+    }
+  }
+
+  let low_byte_mismatch = png_custom_for_test(
+    1U,
+    1U,
+    b'\x10',
+    b'\x00',
+    b"\x00\x12\x34",
+    None,
+    Some(b"\x12\x35"),
+  )
+  match @moonpng.decode(low_byte_mismatch) {
+    Ok(image) => @test.assert_eq(image.pixels, b"\x12\x12\x12\xff")
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
 test "decode filtered RGBA scanlines" {
   let filtered = b"\x01\x0a\x14\x1e\x28\x28\x28\x28\x28" +
     b"\x04\x05\x05\x05\x05\x05\x05\x05\x05"

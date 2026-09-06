@@ -18,13 +18,14 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - reverses all five PNG scanline filters: None, Sub, Up, Average, and Paeth;
 - decodes non-interlaced color types 0, 2, 3, 4, and 6;
 - expands 1-, 2-, and 4-bit packed grayscale and indexed-color samples;
+- downsamples 16-bit channels to RGBA8 using the most significant byte;
 - validates and expands `PLTE` palettes;
 - supports `tRNS` transparency for grayscale, truecolor, and indexed images;
 - converts decoded output to row-major RGBA8;
 - runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
-16-bit samples and Adam7 interlacing are planned work and currently return
-explicit unsupported-feature errors.
+Adam7 interlacing is planned work and currently returns an explicit
+unsupported-feature error.
 
 ## Quick start
 
@@ -104,10 +105,9 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Decode 16-bit samples with documented RGBA8 downsampling.
-2. Add Adam7 interlace reconstruction.
-3. Add deterministic PNG encoding and streaming interfaces.
-4. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
+1. Add Adam7 interlace reconstruction.
+2. Add deterministic PNG encoding and streaming interfaces.
+3. Add a browser demo, conformance fixtures, fuzzing, and benchmarks.
 
 ## Project status
 

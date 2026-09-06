@@ -32,8 +32,8 @@ Byte conversion provides the modulo-256 arithmetic required by PNG filters.
 samples are read most-significant-bit first within each byte, with row padding
 discarded before the next row. Grayscale samples are scaled across the full
 8-bit range; indexed samples are checked before their palette entry is read.
-Keeping this step separate leaves 16-bit downsampling as a contained future
-addition.
+For 16-bit channels, the most significant byte is retained while transparency
+comparisons still use the complete 16-bit sample.
 
 ## Public data model
 

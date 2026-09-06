@@ -16,4 +16,6 @@
   `tRNS` transparency.
 - Added 1-, 2-, and 4-bit packed grayscale and indexed-color decoding, including
   row padding, byte-oriented filtering, and grayscale sample scaling.
+- Added 16-bit decoding for grayscale, truecolor, grayscale-alpha, and RGBA,
+  with full-sample transparency comparison and documented RGBA8 downsampling.
 - Added a decoded-pixel CLI demo and decoder design documentation.

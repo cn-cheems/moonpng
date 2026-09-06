@@ -202,6 +202,11 @@ fn packed_sample(
 }
 
 ///|
+fn scanline_uint16_be(scanlines : Array[Byte], offset : Int) -> Int {
+  (scanlines[offset].to_int() << 8) | scanlines[offset + 1].to_int()
+}
+
+///|
 fn convert_to_rgba(
   scanlines : Array[Byte],
   width : Int,
@@ -220,12 +225,16 @@ fn convert_to_rgba(
     let row_start = y * row_bytes
     for x = 0; x < width; x = x + 1 {
       if color_type == b'\x00' {
-        let sample = if depth == 8 {
+        let sample = if depth == 16 {
+          scanline_uint16_be(scanlines, row_start + x * 2)
+        } else if depth == 8 {
           scanlines[row_start + x].to_int()
         } else {
           packed_sample(scanlines, row_start, x, depth)
         }
-        let gray = if depth == 8 {
+        let gray = if depth == 16 {
+          sample >> 8
+        } else if depth == 8 {
           sample
         } else {
           sample * 255 / ((1 << depth) - 1)
@@ -271,37 +280,58 @@ fn convert_to_rgba(
         }
         rgba.push(alpha)
       } else {
-        let offset = row_start + x * channels
+        let bytes_per_sample = depth / 8
+        let offset = row_start + x * channels * bytes_per_sample
         if color_type == b'\x02' {
-          let red = scanlines[offset]
-          let green = scanlines[offset + 1]
-          let blue = scanlines[offset + 2]
+          let red_sample = if depth == 16 {
+            scanline_uint16_be(scanlines, offset)
+          } else {
+            scanlines[offset].to_int()
+          }
+          let green_sample = if depth == 16 {
+            scanline_uint16_be(scanlines, offset + 2)
+          } else {
+            scanlines[offset + 1].to_int()
+          }
+          let blue_sample = if depth == 16 {
+            scanline_uint16_be(scanlines, offset + 4)
+          } else {
+            scanlines[offset + 2].to_int()
+          }
           let alpha = match color_data.transparent_rgb {
             Some((transparent_red, transparent_green, transparent_blue)) =>
-              if red.to_int() == transparent_red &&
-                green.to_int() == transparent_green &&
-                blue.to_int() == transparent_blue {
+              if red_sample == transparent_red &&
+                green_sample == transparent_green &&
+                blue_sample == transparent_blue {
                 b'\x00'
               } else {
                 b'\xff'
               }
             None => b'\xff'
           }
-          rgba.push(red)
-          rgba.push(green)
-          rgba.push(blue)
+          rgba.push(
+            (if depth == 16 { red_sample >> 8 } else { red_sample }).to_byte(),
+          )
+          rgba.push(
+            (if depth == 16 { green_sample >> 8 } else { green_sample }).to_byte(),
+          )
+          rgba.push(
+            (if depth == 16 { blue_sample >> 8 } else { blue_sample }).to_byte(),
+          )
           rgba.push(alpha)
         } else if color_type == b'\x04' {
           let gray = scanlines[offset]
+          let alpha_offset = if depth == 16 { offset + 2 } else { offset + 1 }
           rgba.push(gray)
           rgba.push(gray)
           rgba.push(gray)
-          rgba.push(scanlines[offset + 1])
+          rgba.push(scanlines[alpha_offset])
         } else {
+          let step = if depth == 16 { 2 } else { 1 }
           rgba.push(scanlines[offset])
-          rgba.push(scanlines[offset + 1])
-          rgba.push(scanlines[offset + 2])
-          rgba.push(scanlines[offset + 3])
+          rgba.push(scanlines[offset + step])
+          rgba.push(scanlines[offset + step * 2])
+          rgba.push(scanlines[offset + step * 3])
         }
       }
     }
@@ -335,8 +365,8 @@ fn collect_idat(
 ///|
 /// Decode a non-interlaced PNG into row-major RGBA8 pixels.
 ///
-/// Grayscale and indexed-color samples may use 1, 2, 4, or 8 bits. Truecolor,
-/// grayscale-alpha, and truecolor-alpha samples currently require 8 bits.
+/// Every bit depth permitted by the PNG color type is supported. Sixteen-bit
+/// channels are converted to RGBA8 by retaining the most significant byte.
 /// `PLTE` palettes and applicable `tRNS` transparency are honored.
 pub fn decode(data : Bytes) -> Result[DecodedImage, DecodeError] {
   decode_with_limits(data, default_decode_limits())
@@ -363,9 +393,6 @@ pub fn decode_with_limits(
     ) {
     Ok(value) => value
     Err(error) => return Err(InvalidContainer(error))
-  }
-  if info.bit_depth == b'\x10' {
-    return Err(UnsupportedBitDepth(info.bit_depth))
   }
   let channels = channels_for_color_type(info.color_type)
   if channels == 0 {
