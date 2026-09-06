@@ -820,6 +820,32 @@ test "choose deterministic adaptive filters per row" {
 }
 
 ///|
+test "encode compact 8-bit PNG color formats" {
+  let cases : Array[(@moonpng.PixelFormat, Byte, Bytes, Bytes)] = [
+    (@moonpng.PixelGray8, b'\x00', b"\x7f", b"\x7f\x7f\x7f\xff"),
+    (@moonpng.PixelGrayAlpha8, b'\x04', b"\x44\x55", b"\x44\x44\x44\x55"),
+    (@moonpng.PixelRgb8, b'\x02', b"\x11\x22\x33", b"\x11\x22\x33\xff"),
+    (@moonpng.PixelRgba8, b'\x06', b"\x11\x22\x33\x44", b"\x11\x22\x33\x44"),
+  ]
+  for item in cases {
+    let (format, color_type, input, expected) = item
+    match @moonpng.encode(1U, 1U, format, input) {
+      Ok(png) => {
+        match @moonpng.inspect(png) {
+          Ok(info) => @test.assert_eq(info.color_type, color_type)
+          Err(error) => fail(error.message())
+        }
+        match @moonpng.decode(png) {
+          Ok(image) => @test.assert_eq(image.pixels, expected)
+          Err(error) => fail(error.message())
+        }
+      }
+      Err(error) => fail(error.message())
+    }
+  }
+}
+
+///|
 test "reject invalid RGBA8 encode input" {
   match @moonpng.encode_rgba8(0U, 1U, b"") {
     Err(@moonpng.EncodeInvalidDimensions(0U, 1U)) => ()

@@ -30,6 +30,15 @@ pub fn default_encode_options() -> EncodeOptions {
 }
 
 ///|
+/// In-memory pixel layout accepted by the PNG encoder.
+pub(all) enum PixelFormat {
+  PixelGray8
+  PixelGrayAlpha8
+  PixelRgb8
+  PixelRgba8
+} derive(Debug, Eq)
+
+///|
 /// Return a concise human-readable explanation for an encode error.
 pub fn EncodeError::message(self : EncodeError) -> String {
   match self {
@@ -38,6 +47,6 @@ pub fn EncodeError::message(self : EncodeError) -> String {
     EncodeImageTooLarge(width, height) =>
       "image \{width}x\{height} is too large for an in-memory PNG"
     EncodePixelLengthMismatch(expected, actual) =>
-      "RGBA8 input requires \{expected} bytes, got \{actual}"
+      "pixel input requires \{expected} bytes, got \{actual}"
   }
 }

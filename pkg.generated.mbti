@@ -18,9 +18,13 @@ pub fn default_decode_limits() -> DecodeLimits
 
 pub fn default_encode_options() -> EncodeOptions
 
+pub fn encode(UInt, UInt, PixelFormat, Bytes) -> Result[Bytes, EncodeError]
+
 pub fn encode_rgba8(UInt, UInt, Bytes) -> Result[Bytes, EncodeError]
 
 pub fn encode_rgba8_with_options(UInt, UInt, Bytes, EncodeOptions) -> Result[Bytes, EncodeError]
+
+pub fn encode_with_options(UInt, UInt, PixelFormat, Bytes, EncodeOptions) -> Result[Bytes, EncodeError]
 
 pub fn inflate_zlib(Bytes) -> Result[Bytes, DecodeError]
 
@@ -116,6 +120,13 @@ pub(all) enum FilterStrategy {
   FilterAverage
   FilterPaeth
   FilterAdaptive
+} derive(Eq, @debug.Debug)
+
+pub(all) enum PixelFormat {
+  PixelGray8
+  PixelGrayAlpha8
+  PixelRgb8
+  PixelRgba8
 } derive(Eq, @debug.Debug)
 
 pub(all) enum PngError {

@@ -24,4 +24,6 @@
   multi-block output, round-trip tests, and input validation.
 - Added caller-selected None, Sub, Up, Average, and Paeth encoding filters plus
   a deterministic per-row adaptive strategy.
+- Added compact 8-bit grayscale, grayscale-alpha, and RGB encoding alongside
+  RGBA, with native PNG color types and round-trip coverage.
 - Added a decoded-pixel CLI demo and decoder design documentation.

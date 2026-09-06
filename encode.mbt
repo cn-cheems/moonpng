@@ -155,10 +155,31 @@ fn encode_choose_filter(
 }
 
 ///|
-/// Encode row-major RGBA8 pixels with caller-provided options.
-pub fn encode_rgba8_with_options(
+fn encode_pixel_channels(format : PixelFormat) -> Int {
+  match format {
+    PixelGray8 => 1
+    PixelGrayAlpha8 => 2
+    PixelRgb8 => 3
+    PixelRgba8 => 4
+  }
+}
+
+///|
+fn encode_color_type(format : PixelFormat) -> Byte {
+  match format {
+    PixelGray8 => b'\x00'
+    PixelGrayAlpha8 => b'\x04'
+    PixelRgb8 => b'\x02'
+    PixelRgba8 => b'\x06'
+  }
+}
+
+///|
+/// Encode row-major 8-bit pixels with caller-provided options.
+pub fn encode_with_options(
   width : UInt,
   height : UInt,
+  format : PixelFormat,
   pixels : Bytes,
   options : EncodeOptions,
 ) -> Result[Bytes, EncodeError] {
@@ -170,14 +191,16 @@ pub fn encode_rgba8_with_options(
   }
   let width_int = width.reinterpret_as_int()
   let height_int = height.reinterpret_as_int()
-  if height_int > 0x7fffffff / 4 || width_int > 0x7fffffff / 4 / height_int {
+  let channels = encode_pixel_channels(format)
+  if height_int > 0x7fffffff / channels ||
+    width_int > 0x7fffffff / channels / height_int {
     return Err(EncodeImageTooLarge(width, height))
   }
-  let expected = width_int * height_int * 4
+  let expected = width_int * height_int * channels
   if pixels.length() != expected {
     return Err(EncodePixelLengthMismatch(expected, pixels.length()))
   }
-  if width_int > (0x7fffffff - height_int) / 4 / height_int {
+  if width_int > (0x7fffffff - height_int) / channels / height_int {
     return Err(EncodeImageTooLarge(width, height))
   }
   let raw_length = expected + height_int
@@ -191,14 +214,14 @@ pub fn encode_rgba8_with_options(
 
   let raw : Array[Byte] = []
   raw.reserve_capacity(raw_length)
-  let row_bytes = width_int * 4
+  let row_bytes = width_int * channels
   for row = 0; row < height_int; row = row + 1 {
     let row_start = row * row_bytes
     let (filter, filtered) = encode_choose_filter(
       pixels,
       row_start,
       row_bytes,
-      4,
+      channels,
       row > 0,
       options.filter_strategy,
     )
@@ -212,7 +235,7 @@ pub fn encode_rgba8_with_options(
   encode_append_uint32_be(ihdr, width)
   encode_append_uint32_be(ihdr, height)
   ihdr.push(b'\x08')
-  ihdr.push(b'\x06')
+  ihdr.push(encode_color_type(format))
   ihdr.push(b'\x00')
   ihdr.push(b'\x00')
   ihdr.push(b'\x00')
@@ -230,6 +253,28 @@ pub fn encode_rgba8_with_options(
 }
 
 ///|
+/// Encode row-major 8-bit grayscale, grayscale-alpha, RGB, or RGBA pixels.
+pub fn encode(
+  width : UInt,
+  height : UInt,
+  format : PixelFormat,
+  pixels : Bytes,
+) -> Result[Bytes, EncodeError] {
+  encode_with_options(width, height, format, pixels, default_encode_options())
+}
+
+///|
+/// Encode row-major RGBA8 pixels with caller-provided options.
+pub fn encode_rgba8_with_options(
+  width : UInt,
+  height : UInt,
+  pixels : Bytes,
+  options : EncodeOptions,
+) -> Result[Bytes, EncodeError] {
+  encode_with_options(width, height, PixelRgba8, pixels, options)
+}
+
+///|
 /// Encode row-major RGBA8 pixels as a deterministic, non-interlaced PNG.
 ///
 /// The default encoder chooses the lowest-cost PNG filter for each row and
@@ -241,5 +286,5 @@ pub fn encode_rgba8(
   height : UInt,
   pixels : Bytes,
 ) -> Result[Bytes, EncodeError] {
-  encode_rgba8_with_options(width, height, pixels, default_encode_options())
+  encode(width, height, PixelRgba8, pixels)
 }
