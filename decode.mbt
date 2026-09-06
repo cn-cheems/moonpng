@@ -340,6 +340,99 @@ fn convert_to_rgba(
 }
 
 ///|
+fn adam7_passes() -> Array[(Int, Int, Int, Int)] {
+  [
+    (0, 0, 8, 8),
+    (4, 0, 8, 8),
+    (0, 4, 4, 8),
+    (2, 0, 4, 4),
+    (0, 2, 2, 4),
+    (1, 0, 2, 2),
+    (0, 1, 1, 2),
+  ]
+}
+
+///|
+fn adam7_extent(size : Int, start : Int, step : Int) -> Int {
+  if size <= start {
+    0
+  } else {
+    (size - start + step - 1) / step
+  }
+}
+
+///|
+fn adam7_inflated_size(width : Int, height : Int, pixel_bits : Int) -> Int? {
+  let mut total = 0
+  for pass in adam7_passes() {
+    let (start_x, start_y, step_x, step_y) = pass
+    let pass_width = adam7_extent(width, start_x, step_x)
+    let pass_height = adam7_extent(height, start_y, step_y)
+    if pass_width > 0 && pass_height > 0 {
+      let row_bytes = (pass_width * pixel_bits + 7) / 8
+      if row_bytes + 1 > (0x7fffffff - total) / pass_height {
+        return None
+      }
+      total = total + (row_bytes + 1) * pass_height
+    }
+  }
+  Some(total)
+}
+
+///|
+fn decode_adam7(
+  inflated : Bytes,
+  width : Int,
+  height : Int,
+  pixel_bits : Int,
+  bit_depth : Byte,
+  color_type : Byte,
+  color_data : ColorData,
+) -> Result[Bytes, DecodeError] {
+  let output = Array::make(width * height * 4, b'\x00')
+  let filter_bytes_per_pixel = (pixel_bits + 7) / 8
+  let mut inflated_offset = 0
+  for pass in adam7_passes() {
+    let (start_x, start_y, step_x, step_y) = pass
+    let pass_width = adam7_extent(width, start_x, step_x)
+    let pass_height = adam7_extent(height, start_y, step_y)
+    if pass_width > 0 && pass_height > 0 {
+      let row_bytes = (pass_width * pixel_bits + 7) / 8
+      let pass_size = (row_bytes + 1) * pass_height
+      let pass_inflated = copy_bytes(inflated, inflated_offset, pass_size)
+      inflated_offset = inflated_offset + pass_size
+      let scanlines = match
+        unfilter_scanlines(
+          pass_inflated, row_bytes, filter_bytes_per_pixel, pass_height,
+        ) {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      let pass_pixels = match
+        convert_to_rgba(
+          scanlines, pass_width, pass_height, row_bytes, bit_depth, color_type, color_data,
+        ) {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      for pass_y = 0; pass_y < pass_height; pass_y = pass_y + 1 {
+        let target_y = start_y + pass_y * step_y
+        for pass_x = 0; pass_x < pass_width; pass_x = pass_x + 1 {
+          let target_x = start_x + pass_x * step_x
+          let source = (pass_y * pass_width + pass_x) * 4
+          let target = (target_y * width + target_x) * 4
+          output[target] = pass_pixels.unsafe_get(source)
+          output[target + 1] = pass_pixels.unsafe_get(source + 1)
+          output[target + 2] = pass_pixels.unsafe_get(source + 2)
+          output[target + 3] = pass_pixels.unsafe_get(source + 3)
+        }
+      }
+    }
+  }
+  Ok(Bytes::from_array(output))
+}
+
+///|
 fn collect_idat(
   data : Bytes,
   info : PngInfo,
@@ -363,7 +456,7 @@ fn collect_idat(
 }
 
 ///|
-/// Decode a non-interlaced PNG into row-major RGBA8 pixels.
+/// Decode a PNG into row-major RGBA8 pixels.
 ///
 /// Every bit depth permitted by the PNG color type is supported. Sixteen-bit
 /// channels are converted to RGBA8 by retaining the most significant byte.
@@ -398,7 +491,7 @@ pub fn decode_with_limits(
   if channels == 0 {
     return Err(UnsupportedColorType(info.color_type))
   }
-  if info.interlace_method != b'\x00' {
+  if info.interlace_method != b'\x00' && info.interlace_method != b'\x01' {
     return Err(UnsupportedInterlace(info.interlace_method))
   }
   for chunk in info.chunks {
@@ -430,7 +523,15 @@ pub fn decode_with_limits(
   if row_bytes >= 0x7fffffff || row_bytes + 1 > 0x7fffffff / height {
     return Err(ImageTooLarge(info.width, info.height, limits.max_pixels))
   }
-  let expected_inflated_size = (row_bytes + 1) * height
+  let expected_inflated_size = if info.interlace_method == b'\x00' {
+    (row_bytes + 1) * height
+  } else {
+    match adam7_inflated_size(width, height, pixel_bits) {
+      Some(value) => value
+      None =>
+        return Err(ImageTooLarge(info.width, info.height, limits.max_pixels))
+    }
+  }
   if expected_inflated_size > limits.max_inflated_size {
     return Err(OutputLimitExceeded(limits.max_inflated_size))
   }
@@ -448,24 +549,40 @@ pub fn decode_with_limits(
     Ok(value) => value
     Err(error) => return Err(error)
   }
-  let filter_bytes_per_pixel = (pixel_bits + 7) / 8
-  let scanlines = match
-    unfilter_scanlines(inflated, row_bytes, filter_bytes_per_pixel, height) {
-    Ok(value) => value
-    Err(error) => return Err(error)
-  }
-  let pixels = match
-    convert_to_rgba(
-      scanlines,
-      width,
-      height,
-      row_bytes,
-      info.bit_depth,
-      info.color_type,
-      color_data,
-    ) {
-    Ok(value) => value
-    Err(error) => return Err(error)
+  let pixels = if info.interlace_method == b'\x00' {
+    let filter_bytes_per_pixel = (pixel_bits + 7) / 8
+    let scanlines = match
+      unfilter_scanlines(inflated, row_bytes, filter_bytes_per_pixel, height) {
+      Ok(value) => value
+      Err(error) => return Err(error)
+    }
+    match
+      convert_to_rgba(
+        scanlines,
+        width,
+        height,
+        row_bytes,
+        info.bit_depth,
+        info.color_type,
+        color_data,
+      ) {
+      Ok(value) => value
+      Err(error) => return Err(error)
+    }
+  } else {
+    match
+      decode_adam7(
+        inflated,
+        width,
+        height,
+        pixel_bits,
+        info.bit_depth,
+        info.color_type,
+        color_data,
+      ) {
+      Ok(value) => value
+      Err(error) => return Err(error)
+    }
   }
   Ok({ width: info.width, height: info.height, pixels, })
 }

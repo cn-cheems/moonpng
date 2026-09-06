@@ -138,6 +138,7 @@ fn png_custom_with_idat_parts_for_test(
   height : UInt,
   bit_depth : Byte,
   color_type : Byte,
+  interlace_method : Byte,
   idat_parts : Array[Bytes],
   palette : Bytes?,
   transparency : Bytes?,
@@ -149,7 +150,7 @@ fn png_custom_with_idat_parts_for_test(
   ihdr.push(color_type)
   ihdr.push(b'\x00')
   ihdr.push(b'\x00')
-  ihdr.push(b'\x00')
+  ihdr.push(interlace_method)
   let output : Array[Byte] = []
   append_bytes_for_test(output, b"\x89PNG\r\n\x1a\n")
   append_chunk_for_test(output, b"IHDR", Bytes::from_array(ihdr))
@@ -181,6 +182,7 @@ fn png_with_idat_parts_for_test(
     height,
     b'\x08',
     color_type,
+    b'\x00',
     idat_parts,
     None,
     transparency,
@@ -219,6 +221,29 @@ fn png_custom_for_test(
     height,
     bit_depth,
     color_type,
+    b'\x00',
+    [stored_zlib_for_test(scanlines)],
+    palette,
+    transparency,
+  )
+}
+
+///|
+fn png_interlaced_for_test(
+  width : UInt,
+  height : UInt,
+  bit_depth : Byte,
+  color_type : Byte,
+  scanlines : Bytes,
+  palette : Bytes?,
+  transparency : Bytes?,
+) -> Bytes {
+  png_custom_with_idat_parts_for_test(
+    width,
+    height,
+    bit_depth,
+    color_type,
+    b'\x01',
     [stored_zlib_for_test(scanlines)],
     palette,
     transparency,
@@ -540,6 +565,57 @@ test "apply byte filters before unpacking samples" {
         Some({ red: b'\xff', green: b'\xff', blue: b'\xff', alpha: b'\xff', }),
       )
     }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "decode Adam7 interlaced RGBA pixels" {
+  let passes = b"\x00\x01\x02\x03\xff" +
+    b"\x00\x21\x22\x23\xff" +
+    b"\x00\x61\x62\x63\xff\x81\x82\x83\xff" +
+    b"\x00\x11\x12\x13\xff\x00\x71\x72\x73\xff" +
+    b"\x00\x31\x32\x33\xff\x41\x42\x43\xff\x51\x52\x53\xff"
+  let png = png_interlaced_for_test(
+    3U,
+    3U,
+    b'\x08',
+    b'\x06',
+    passes,
+    None,
+    None,
+  )
+  let expected = b"\x01\x02\x03\xff\x11\x12\x13\xff\x21\x22\x23\xff" +
+    b"\x31\x32\x33\xff\x41\x42\x43\xff\x51\x52\x53\xff" +
+    b"\x61\x62\x63\xff\x71\x72\x73\xff\x81\x82\x83\xff"
+  match @moonpng.decode(png) {
+    Ok(image) => @test.assert_eq(image.pixels, expected)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "decode packed Adam7 indexed pixels" {
+  let passes = b"\x00\x00" +
+    b"\x00\x80" +
+    b"\x00\x80" +
+    b"\x00\x40\x00\xc0" +
+    b"\x00\xc4"
+  let palette = b"\x00\x00\x00\x55\x55\x55\xaa\xaa\xaa\xff\xff\xff"
+  let png = png_interlaced_for_test(
+    3U,
+    3U,
+    b'\x02',
+    b'\x03',
+    passes,
+    Some(palette),
+    None,
+  )
+  let expected = b"\x00\x00\x00\xff\x55\x55\x55\xff\xaa\xaa\xaa\xff" +
+    b"\xff\xff\xff\xff\x00\x00\x00\xff\x55\x55\x55\xff" +
+    b"\xaa\xaa\xaa\xff\xff\xff\xff\xff\x00\x00\x00\xff"
+  match @moonpng.decode(png) {
+    Ok(image) => @test.assert_eq(image.pixels, expected)
     Err(error) => fail(error.message())
   }
 }

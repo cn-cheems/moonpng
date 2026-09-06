@@ -18,4 +18,6 @@
   row padding, byte-oriented filtering, and grayscale sample scaling.
 - Added 16-bit decoding for grayscale, truecolor, grayscale-alpha, and RGBA,
   with full-sample transparency comparison and documented RGBA8 downsampling.
+- Added Adam7 reconstruction for every supported color type and bit depth,
+  including packed indexed samples and independent filtering per pass.
 - Added a decoded-pixel CLI demo and decoder design documentation.

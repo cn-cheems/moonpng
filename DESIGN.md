@@ -27,6 +27,9 @@ The final Adler-32 value is compared before inflated bytes are returned.
 `unfilter_scanlines` reconstructs rows into a separate buffer. Left, above, and
 upper-left values always come from bytes that have already been reconstructed.
 Byte conversion provides the modulo-256 arithmetic required by PNG filters.
+For Adam7 images, each pass is sized, unfiltered, and converted independently
+before its pixels are scattered into the final row-major image. Filter history
+therefore resets at every pass boundary as required by PNG.
 
 `convert_to_rgba` is the only stage that depends on PNG color type. Packed
 samples are read most-significant-bit first within each byte, with row padding
@@ -52,6 +55,7 @@ comparisons still use the complete 16-bit sample.
 - A DEFLATE distance cannot refer before the beginning of output.
 - A DEFLATE match cannot grow output beyond its configured limit.
 - The inflated byte count must exactly match the expected scanline layout.
+- Every Adam7 pass is bounded before slicing or allocating its scanlines.
 - Palette indices are checked before color or alpha entries are accessed.
 - Unsupported formats fail explicitly rather than producing approximate pixels.
 
