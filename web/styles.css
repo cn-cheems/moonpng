@@ -1,0 +1,374 @@
+:root {
+  color-scheme: dark;
+  --ink: #f5f8fb;
+  --muted: #90a0ad;
+  --line: #263440;
+  --panel: #111a21;
+  --panel-raised: #17232c;
+  --canvas: #0b1116;
+  --accent: #55e6b4;
+  --accent-strong: #8bffd7;
+  --error: #ff8c8c;
+  --working: #f7cd68;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #0a1015;
+  color: var(--ink);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    radial-gradient(circle at 78% -10%, rgba(85, 230, 180, 0.12), transparent 32rem),
+    #0a1015;
+  background-size: 32px 32px, 32px 32px, auto, auto;
+}
+
+a { color: inherit; }
+button, input { font: inherit; }
+
+.topbar {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 max(24px, calc((100vw - 1320px) / 2));
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 16, 21, 0.86);
+  backdrop-filter: blur(16px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: #07110d;
+  background: var(--accent);
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-weight: 900;
+  clip-path: polygon(0 0, 78% 0, 100% 22%, 100% 100%, 0 100%);
+}
+
+.runtime {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.8rem;
+}
+
+.runtime span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+}
+
+.repo-link {
+  margin-left: auto;
+  color: #c2ced6;
+  font-size: 0.88rem;
+  text-decoration: none;
+}
+
+.repo-link:hover { color: var(--accent-strong); }
+
+.workspace {
+  width: min(1320px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 42px 0 28px;
+}
+
+.intro {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 480px);
+  align-items: end;
+  gap: 32px;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 9px;
+  color: var(--accent);
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  line-height: 1;
+  letter-spacing: -0.055em;
+}
+
+.intro > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.work-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(360px, 0.85fr);
+  gap: 18px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: linear-gradient(145deg, rgba(23, 35, 44, 0.96), rgba(14, 22, 29, 0.98));
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.2);
+}
+
+.panel-heading {
+  min-height: 70px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.panel-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.step {
+  color: var(--accent);
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.72rem;
+}
+
+.primary-button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  color: #07110d;
+  background: var(--accent);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.primary-button:hover { background: var(--accent-strong); }
+.primary-button:disabled { opacity: 0.55; cursor: wait; }
+
+.drop-zone {
+  min-height: 390px;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(45deg, #0d151b 25%, transparent 25%),
+    linear-gradient(-45deg, #0d151b 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #0d151b 75%),
+    linear-gradient(-45deg, transparent 75%, #0d151b 75%),
+    var(--canvas);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+  transition: box-shadow 160ms ease;
+}
+
+.drop-zone[data-dragging="true"] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+#preview {
+  display: block;
+  max-width: 100%;
+  max-height: 342px;
+  width: auto;
+  height: auto;
+  image-rendering: pixelated;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
+}
+
+#preview-empty { color: var(--muted); }
+
+.drop-hint {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  padding: 6px 9px;
+  color: #71818e;
+  background: rgba(10, 16, 21, 0.8);
+  font-size: 0.75rem;
+}
+
+.status-row {
+  min-height: 58px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.status::before { content: "●"; margin-right: 8px; }
+.status[data-tone="success"] { color: var(--accent); }
+.status[data-tone="error"] { color: var(--error); }
+.status[data-tone="working"] { color: var(--working); }
+
+.download {
+  margin-left: auto;
+  flex: none;
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+  text-underline-offset: 4px;
+}
+
+.facts {
+  margin: 0;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line);
+}
+
+.fact {
+  min-width: 0;
+  padding: 15px;
+  background: var(--panel);
+}
+
+.fact-wide { grid-column: 1 / -1; }
+.fact dt { color: var(--muted); font-size: 0.74rem; }
+.fact dd {
+  margin: 7px 0 0;
+  overflow: hidden;
+  color: #e7eef3;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline {
+  padding: 19px 18px;
+  display: flex;
+  align-items: center;
+  color: #b9c5cd;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.72rem;
+}
+
+.pipeline i {
+  height: 1px;
+  flex: 1;
+  margin: 0 8px;
+  background: linear-gradient(90deg, var(--accent), var(--line));
+}
+
+.chunks-panel { margin-top: 18px; }
+.table-note { color: var(--muted); font-size: 0.76rem; }
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+th, td {
+  padding: 13px 18px;
+  border-bottom: 1px solid rgba(38, 52, 64, 0.72);
+  white-space: nowrap;
+}
+
+th {
+  color: #7f909d;
+  font-size: 0.69rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: rgba(85, 230, 180, 0.035); }
+td:nth-child(2) { color: var(--accent-strong); font-weight: 750; }
+td[data-role="critical"] { color: #f0c66d; }
+td[data-role="ancillary"] { color: #8da0ae; }
+.crc-ok { color: var(--accent); }
+
+footer {
+  width: min(1320px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 22px 0 30px;
+  display: flex;
+  justify-content: space-between;
+  color: #667784;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 900px) {
+  .workspace { width: min(100% - 28px, 700px); padding-top: 28px; }
+  .topbar { padding: 0 16px; }
+  .runtime { display: none; }
+  .intro { grid-template-columns: 1fr; gap: 16px; }
+  .work-grid { grid-template-columns: 1fr; }
+  .drop-zone { min-height: 320px; }
+  footer { width: calc(100% - 28px); }
+}
+
+@media (max-width: 520px) {
+  .repo-link { font-size: 0; }
+  .repo-link::after { content: "GitHub ↗"; font-size: 0.82rem; }
+  .workspace { width: calc(100% - 20px); }
+  .intro > p { font-size: 0.93rem; }
+  h1 { font-size: 2.25rem; }
+  .panel-heading { padding: 13px; }
+  .drop-zone { min-height: 260px; padding: 14px; }
+  .facts { padding: 12px; }
+  .fact { padding: 12px; }
+  .status-row { align-items: flex-start; flex-direction: column; }
+  .download { margin-left: 0; }
+  th, td { padding: 12px 14px; }
+  footer { width: calc(100% - 20px); flex-direction: column; gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; }
+}

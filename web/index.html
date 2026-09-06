@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="MoonPNG 浏览器实验台：检查、解码并重新编码 PNG 图片。">
+    <title>MoonPNG 浏览器实验台</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2355e6b4'/%3E%3Cpath d='M7 24V8h4l5 8 5-8h4v16h-4V14l-5 8-5-8v10z' fill='%2307110d'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="https://github.com/cn-cheems/moonpng#readme" aria-label="查看 MoonPNG 项目说明">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span>MoonPNG</span>
+      </a>
+      <div class="runtime"><span></span>MoonBit · JavaScript</div>
+      <a class="repo-link" href="https://github.com/cn-cheems/moonpng">GitHub 仓库 ↗</a>
+    </header>
+
+    <main id="workspace" class="workspace" aria-busy="true">
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">PNG CODEC WORKBENCH</p>
+          <h1 id="page-title">在浏览器里拆开一张 PNG</h1>
+        </div>
+        <p>文件仅在本机处理。MoonBit 完成结构校验、像素解码、重新编码和结果复验。</p>
+      </section>
+
+      <section class="work-grid">
+        <article class="panel preview-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="step">01</span>
+              <h2>图像预览</h2>
+            </div>
+            <button id="choose-file" class="primary-button" type="button">选择 PNG</button>
+            <input id="file-input" type="file" accept="image/png,.png" hidden>
+          </div>
+          <div id="drop-zone" class="drop-zone">
+            <canvas id="preview" aria-label="解码后的 PNG 图像"></canvas>
+            <p id="preview-empty" hidden>把 PNG 文件拖到这里</p>
+            <div class="drop-hint">拖放文件到画布即可替换示例</div>
+          </div>
+          <div class="status-row">
+            <p id="status" class="status" data-tone="working" role="status">正在启动 MoonPNG…</p>
+            <a id="download" class="download" href="#" hidden>下载重编码结果</a>
+          </div>
+        </article>
+
+        <article class="panel facts-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="step">02</span>
+              <h2>解码摘要</h2>
+            </div>
+          </div>
+          <dl class="facts">
+            <div class="fact fact-wide"><dt>文件</dt><dd id="file-name">—</dd></div>
+            <div class="fact"><dt>原始大小</dt><dd id="source-size">—</dd></div>
+            <div class="fact"><dt>图像尺寸</dt><dd id="dimensions">—</dd></div>
+            <div class="fact"><dt>位深</dt><dd id="bit-depth">—</dd></div>
+            <div class="fact"><dt>颜色类型</dt><dd id="color-format">—</dd></div>
+            <div class="fact"><dt>隔行方式</dt><dd id="interlace">—</dd></div>
+            <div class="fact"><dt>Chunk 数量</dt><dd id="chunk-count">—</dd></div>
+            <div class="fact"><dt>RGBA8 大小</dt><dd id="decoded-size">—</dd></div>
+            <div class="fact"><dt>重编码大小</dt><dd id="encoded-size">—</dd></div>
+          </dl>
+          <div class="pipeline" aria-label="处理步骤">
+            <span>Inspect</span><i></i><span>Decode</span><i></i><span>Encode</span><i></i><span>Verify</span>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel chunks-panel" aria-labelledby="chunks-title">
+        <div class="panel-heading">
+          <div>
+            <span class="step">03</span>
+            <h2 id="chunks-title">Chunk 结构</h2>
+          </div>
+          <span class="table-note">偏移量按文件起始位置计算</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>类型</th><th>数据长度</th><th>起始偏移</th><th>角色</th><th>CRC</th></tr></thead>
+            <tbody id="chunk-rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Pure MoonBit PNG codec</span>
+      <span>Apache-2.0 · cn-cheems</span>
+    </footer>
+    <script src="../_build/js/release/build/cmd/web/web.js"></script>
+  </body>
+</html>

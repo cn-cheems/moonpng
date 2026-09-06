@@ -29,6 +29,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - splits zlib output across caller-sized consecutive IDAT chunks;
 - encodes row-provided images into bounded output fragments without retaining
   the complete source image or compressed stream;
+- includes a local browser workbench for upload, inspection, decoded preview,
+  deterministic re-encoding, and pixel-level round-trip verification;
 - runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
 ## Quick start
@@ -46,6 +48,20 @@ MoonPNG decode demo
 image: 1x1, format=RGBA8
 pixel(0, 0): rgba(255, 0, 0, 255)
 ```
+
+## Browser workbench
+
+Build the MoonBit JavaScript target and serve the repository root:
+
+```bash
+moon build cmd/web --target js --release
+python3 -m http.server 8000
+```
+
+Open <http://localhost:8000/web/>. On Windows, `py -3 -m http.server 8000`
+can be used for the second command. The workbench starts with a generated
+sample and accepts local PNG files by picker or drag and drop. Uploaded files
+stay in the browser.
 
 ## Decode an image
 
@@ -152,7 +168,7 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add a browser demo and downloadable round-trip examples.
+1. Add a reusable PNG metadata reader and writer.
 2. Add conformance fixtures, fuzzing, and benchmarks.
 
 ## Project status

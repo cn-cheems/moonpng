@@ -24,6 +24,9 @@ jobs:
         run: moon check --target all --deny-warn
       - name: Test
         run: moon test --target all --deny-warn
+      - name: Build browser workbench
+        if: runner.os == 'Linux'
+        run: moon build cmd/web --target js --release --deny-warn
       - name: Verify generated interfaces and formatting
         shell: bash
         run: |

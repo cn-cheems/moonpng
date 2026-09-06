@@ -89,3 +89,13 @@ The library uses MoonBit bytes, arrays, integers, and result types only. It does
 not call a native compression library and has no target-specific implementation
 branch. CI exercises native, JavaScript, Wasm, and Wasm GC builds on Windows,
 macOS, and Linux.
+
+## Browser workbench
+
+The browser entry point is a thin MoonBit controller compiled with the
+JavaScript backend. Browser bindings are limited to file selection, canvas
+painting, table updates, and download creation; parsing, checksums, decoding,
+encoding, and pixel comparison all call the same `cn-cheems/moonpng` package as
+the command-line example and tests. Uploaded bytes do not leave the page. The
+demo applies tighter decode limits than the library defaults to keep the page
+responsive on ordinary devices.

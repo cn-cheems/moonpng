@@ -30,4 +30,6 @@
   per-chunk CRC validation, and decoder round-trip coverage.
 - Added row-oriented encoding with bounded IDAT fragments, incremental Adler-32,
   cross-block scanline handling, and explicit row-length validation.
+- Added a MoonBit-driven browser workbench with local file loading, decoded
+  canvas preview, chunk inspection, re-encoding, and pixel round-trip checks.
 - Added a decoded-pixel CLI demo and decoder design documentation.
