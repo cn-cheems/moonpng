@@ -36,4 +36,6 @@
   language-tag, compression-method, and aggregate-size validation.
 - Added deterministic text insertion and replacement plus browser metadata
   display and preservation during re-encoding.
+- Added an interactive browser metadata editor for adding, updating, converting,
+  compressing, and removing PNG text entries with inline validation feedback.
 - Added a decoded-pixel CLI demo and decoder design documentation.

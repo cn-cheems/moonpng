@@ -1,4 +1,10 @@
 ///|
+let browser_current_png : Ref[Bytes?] = { val: None, }
+
+///|
+let browser_current_name : Ref[String] = { val: "moonpng.png", }
+
+///|
 extern "js" fn browser_bind_file_handler(
   handler : (String, Bytes) -> Unit,
 ) -> Unit =
@@ -78,27 +84,155 @@ extern "js" fn browser_clear_chunks() -> Unit =
 ///|
 extern "js" fn browser_clear_text_entries() -> Unit =
   #| function() {
-  #|   document.getElementById("text-rows").replaceChildren();
+  #|   document.getElementById("text-entries").replaceChildren();
   #|   document.getElementById("text-empty").hidden = false;
   #| }
 
 ///|
+extern "js" fn browser_set_text_editor_enabled(enabled : Bool) -> Unit =
+  #| function(enabled) {
+  #|   document.getElementById("text-editor").disabled = !enabled;
+  #| }
+
+///|
+extern "js" fn browser_reset_text_form() -> Unit =
+  #| function() {
+  #|   const form = document.getElementById("text-add-form");
+  #|   form.reset();
+  #|   document.getElementById("text-add-format").dispatchEvent(new Event("change"));
+  #| }
+
+///|
+extern "js" fn browser_bind_text_editor(
+  save_handler : (Int, String, String, String, String, String) -> Unit,
+  delete_handler : (Int) -> Unit,
+) -> Unit =
+  #| function(saveHandler, deleteHandler) {
+  #|   globalThis.__moonpngSaveText = saveHandler;
+  #|   globalThis.__moonpngDeleteText = deleteHandler;
+  #|   const form = document.getElementById("text-add-form");
+  #|   const format = document.getElementById("text-add-format");
+  #|   const international = document.getElementById("text-add-international");
+  #|   const syncInternational = () => {
+  #|     international.hidden = !format.value.startsWith("itxt");
+  #|   };
+  #|   format.addEventListener("change", syncInternational);
+  #|   syncInternational();
+  #|   form.addEventListener("submit", (event) => {
+  #|     event.preventDefault();
+  #|     saveHandler(
+  #|       -1,
+  #|       format.value,
+  #|       document.getElementById("text-add-keyword").value,
+  #|       document.getElementById("text-add-value").value,
+  #|       document.getElementById("text-add-language").value,
+  #|       document.getElementById("text-add-translated").value,
+  #|     );
+  #|   });
+  #| }
+
+///|
 extern "js" fn browser_add_text_entry(
-  format : String,
+  index : Int,
+  format_code : String,
   keyword : String,
   text : String,
   language : String,
+  translated : String,
 ) -> Unit =
-  #| function(format, keyword, text, language) {
-  #|   const row = document.createElement("tr");
-  #|   for (const [value, className] of [[format, ""], [keyword, "keyword-cell"], [text, "text-cell"], [language || "—", ""]]) {
-  #|     const cell = document.createElement("td");
-  #|     cell.textContent = value;
-  #|     cell.title = value;
-  #|     if (className) cell.className = className;
-  #|     row.appendChild(cell);
+  #| function(index, formatCode, keyword, text, language, translated) {
+  #|   const formats = [
+  #|     ["itxt", "iTXt · UTF-8"],
+  #|     ["itxt-zlib", "iTXt · UTF-8 · zlib"],
+  #|     ["text", "tEXt · Latin-1"],
+  #|     ["ztxt", "zTXt · Latin-1 · zlib"],
+  #|   ];
+  #|   const field = (title, control, className = "") => {
+  #|     const label = document.createElement("label");
+  #|     label.className = `editor-field ${className}`.trim();
+  #|     const caption = document.createElement("span");
+  #|     caption.textContent = title;
+  #|     label.append(caption, control);
+  #|     return label;
+  #|   };
+  #|   const input = (value, placeholder = "") => {
+  #|     const control = document.createElement("input");
+  #|     control.value = value;
+  #|     control.placeholder = placeholder;
+  #|     return control;
+  #|   };
+  #|   const card = document.createElement("article");
+  #|   card.className = "metadata-entry";
+  #|   const heading = document.createElement("div");
+  #|   heading.className = "entry-card-heading";
+  #|   const number = document.createElement("span");
+  #|   number.className = "entry-number";
+  #|   number.textContent = `条目 ${String(index + 1).padStart(2, "0")}`;
+  #|   const badge = document.createElement("span");
+  #|   badge.className = "format-badge";
+  #|   const actions = document.createElement("div");
+  #|   actions.className = "entry-actions";
+  #|   const save = document.createElement("button");
+  #|   save.type = "button";
+  #|   save.className = "entry-button";
+  #|   save.textContent = "保存";
+  #|   const remove = document.createElement("button");
+  #|   remove.type = "button";
+  #|   remove.className = "entry-button entry-button-danger";
+  #|   remove.textContent = "删除";
+  #|   actions.append(save, remove);
+  #|   heading.append(number, badge, actions);
+  #|   const grid = document.createElement("div");
+  #|   grid.className = "entry-grid";
+  #|   const format = document.createElement("select");
+  #|   for (const [value, label] of formats) {
+  #|     const option = document.createElement("option");
+  #|     option.value = value;
+  #|     option.textContent = label;
+  #|     format.appendChild(option);
   #|   }
-  #|   document.getElementById("text-rows").appendChild(row);
+  #|   format.value = formatCode;
+  #|   const keywordInput = input(keyword, "例如 Title");
+  #|   keywordInput.maxLength = 79;
+  #|   const textInput = document.createElement("textarea");
+  #|   textInput.rows = 3;
+  #|   textInput.value = text;
+  #|   const languageInput = input(language, "例如 zh-Hans");
+  #|   const translatedInput = input(translated, "例如 标题");
+  #|   const international = document.createElement("div");
+  #|   international.className = "international-fields";
+  #|   international.append(
+  #|     field("语言标签（可选）", languageInput),
+  #|     field("翻译后的关键字（可选）", translatedInput),
+  #|   );
+  #|   grid.append(
+  #|     field("格式", format),
+  #|     field("关键字", keywordInput),
+  #|     field("内容", textInput, "entry-content"),
+  #|     international,
+  #|   );
+  #|   const syncInternational = () => {
+  #|     const selected = formats.find(([value]) => value === format.value);
+  #|     badge.textContent = selected ? selected[1] : format.value;
+  #|     international.hidden = !format.value.startsWith("itxt");
+  #|   };
+  #|   format.addEventListener("change", syncInternational);
+  #|   syncInternational();
+  #|   save.addEventListener("click", () => globalThis.__moonpngSaveText(
+  #|     index,
+  #|     format.value,
+  #|     keywordInput.value,
+  #|     textInput.value,
+  #|     languageInput.value,
+  #|     translatedInput.value,
+  #|   ));
+  #|   remove.addEventListener("click", () => {
+  #|     if (window.confirm(`确定删除文本条目“${keywordInput.value}”吗？`)) {
+  #|       globalThis.__moonpngDeleteText(index);
+  #|     }
+  #|   });
+  #|   card.append(heading, grid);
+  #|   document.getElementById("text-entries").appendChild(card);
   #|   document.getElementById("text-empty").hidden = true;
   #| }
 
@@ -222,12 +356,12 @@ fn interlace_name(interlace : Byte) -> String {
 }
 
 ///|
-fn text_format_name(format : @moonpng.TextFormat) -> String {
+fn text_format_code(format : @moonpng.TextFormat) -> String {
   match format {
-    @moonpng.TextLatin1 => "tEXt"
-    @moonpng.TextLatin1Compressed => "zTXt"
-    @moonpng.TextInternational => "iTXt"
-    @moonpng.TextInternationalCompressed => "iTXt · zlib"
+    @moonpng.TextLatin1 => "text"
+    @moonpng.TextLatin1Compressed => "ztxt"
+    @moonpng.TextInternational => "itxt"
+    @moonpng.TextInternationalCompressed => "itxt-zlib"
   }
 }
 
@@ -252,8 +386,155 @@ fn browser_text_limits() -> @moonpng.TextLimits {
 }
 
 ///|
-fn present_png(name : String, data : Bytes) -> Unit {
+fn browser_make_text_entry(
+  format_code : String,
+  keyword : String,
+  text : String,
+  language : String,
+  translated : String,
+) -> Result[@moonpng.TextEntry, String] {
+  match format_code {
+    "text" => Ok(@moonpng.latin1_text(keyword, text))
+    "ztxt" => Ok(@moonpng.latin1_text(keyword, text, compressed=true))
+    "itxt" =>
+      Ok(
+        @moonpng.international_text(
+          keyword,
+          text,
+          language_tag=language,
+          translated_keyword=translated,
+        ),
+      )
+    "itxt-zlib" =>
+      Ok(
+        @moonpng.international_text(
+          keyword,
+          text,
+          language_tag=language,
+          translated_keyword=translated,
+          compressed=true,
+        ),
+      )
+    _ => Err("未知文本格式")
+  }
+}
+
+///|
+fn browser_editor_error(message : String) -> Unit {
+  browser_set_status("error", "文本元数据未更新：\{message}")
+  browser_set_busy(false)
+  browser_set_text_editor_enabled(true)
+}
+
+///|
+fn browser_save_text_entry(
+  index : Int,
+  format_code : String,
+  keyword : String,
+  text : String,
+  language : String,
+  translated : String,
+) -> Unit {
   browser_set_busy(true)
+  browser_set_text_editor_enabled(false)
+  let entry = match
+    browser_make_text_entry(format_code, keyword, text, language, translated) {
+    Ok(value) => value
+    Err(error) => {
+      browser_editor_error(error)
+      return
+    }
+  }
+  let png = match browser_current_png.val {
+    Some(value) => value
+    None => {
+      browser_editor_error("请先载入有效的 PNG 文件")
+      return
+    }
+  }
+  let entries = match
+    @moonpng.read_text_entries_with_limits(png, browser_text_limits()) {
+    Ok(value) => value
+    Err(error) => {
+      browser_editor_error(error.message())
+      return
+    }
+  }
+  if index < -1 || index >= entries.length() {
+    browser_editor_error("要修改的条目不存在")
+    return
+  }
+  let updated : Array[@moonpng.TextEntry] = []
+  if index < 0 {
+    for current in entries {
+      updated.push(current)
+    }
+    updated.push(entry)
+  } else {
+    for current_index, current in entries {
+      updated.push(if current_index == index { entry } else { current })
+    }
+  }
+  match @moonpng.replace_text_entries(png, updated) {
+    Err(error) => browser_editor_error(error.message())
+    Ok(result) => {
+      if index < 0 {
+        browser_reset_text_form()
+      }
+      present_png(
+        browser_current_name.val,
+        result,
+        "文本元数据已更新，下载文件已重新生成。",
+      )
+    }
+  }
+}
+
+///|
+fn browser_delete_text_entry(index : Int) -> Unit {
+  browser_set_busy(true)
+  browser_set_text_editor_enabled(false)
+  let png = match browser_current_png.val {
+    Some(value) => value
+    None => {
+      browser_editor_error("请先载入有效的 PNG 文件")
+      return
+    }
+  }
+  let entries = match
+    @moonpng.read_text_entries_with_limits(png, browser_text_limits()) {
+    Ok(value) => value
+    Err(error) => {
+      browser_editor_error(error.message())
+      return
+    }
+  }
+  if index < 0 || index >= entries.length() {
+    browser_editor_error("要删除的条目不存在")
+    return
+  }
+  let updated : Array[@moonpng.TextEntry] = []
+  for current_index, current in entries {
+    if current_index != index {
+      updated.push(current)
+    }
+  }
+  match @moonpng.replace_text_entries(png, updated) {
+    Err(error) => browser_editor_error(error.message())
+    Ok(result) =>
+      present_png(
+        browser_current_name.val,
+        result,
+        "文本条目已删除，下载文件已重新生成。",
+      )
+  }
+}
+
+///|
+fn present_png(name : String, data : Bytes, success_message : String) -> Unit {
+  browser_current_png.val = None
+  browser_set_busy(true)
+  browser_set_text_editor_enabled(false)
   browser_begin_file(name, data.length())
   browser_set_status("working", "正在校验 PNG 结构与校验和…")
   browser_clear_chunks()
@@ -285,12 +566,14 @@ fn present_png(name : String, data : Bytes) -> Unit {
         }
         Ok(value) => value
       }
-      for entry in text_entries {
+      for index, entry in text_entries {
         browser_add_text_entry(
-          text_format_name(entry.format),
+          index,
+          text_format_code(entry.format),
           entry.keyword,
           entry.text,
           entry.language_tag,
+          entry.translated_keyword,
         )
       }
       browser_set_status("working", "结构有效，正在解码像素…")
@@ -346,10 +629,11 @@ fn present_png(name : String, data : Bytes) -> Unit {
                       info.chunks.length(),
                       text_entries.length(),
                     )
+                    browser_current_png.val = Some(encoded)
+                    browser_current_name.val = name
                     browser_set_download(encoded, name)
-                    browser_set_status(
-                      "success", "结构、CRC、解码及往返编码校验全部通过。",
-                    )
+                    browser_set_text_editor_enabled(true)
+                    browser_set_status("success", success_message)
                   } else {
                     browser_set_status(
                       "error", "往返编码后的像素与原图不一致。",
@@ -363,6 +647,13 @@ fn present_png(name : String, data : Bytes) -> Unit {
       }
     }
   }
+}
+
+///|
+fn present_uploaded_png(name : String, data : Bytes) -> Unit {
+  present_png(
+    name, data, "结构、CRC、解码及往返编码校验全部通过。",
+  )
 }
 
 ///|
@@ -398,7 +689,8 @@ fn sample_png() -> Result[Bytes, @moonpng.EncodeError] {
 
 ///|
 fn main {
-  browser_bind_file_handler(present_png)
+  browser_bind_file_handler(present_uploaded_png)
+  browser_bind_text_editor(browser_save_text_entry, browser_delete_text_entry)
   match sample_png() {
     Ok(png) =>
       match
@@ -411,7 +703,7 @@ fn main {
             translated_keyword="标题",
           ),
         ]) {
-        Ok(with_text) => present_png("moonpng-sample.png", with_text)
+        Ok(with_text) => present_uploaded_png("moonpng-sample.png", with_text)
         Err(error) =>
           browser_set_status(
             "error",

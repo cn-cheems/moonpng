@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MoonPNG 浏览器实验台：检查、解码并重新编码 PNG 图片。">
+    <meta name="description" content="MoonPNG 浏览器实验台：检查、解码、编辑元数据并重新编码 PNG 图片。">
     <title>MoonPNG 浏览器实验台</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2355e6b4'/%3E%3Cpath d='M7 24V8h4l5 8 5-8h4v16h-4V14l-5 8-5-8v10z' fill='%2307110d'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="styles.css">
@@ -24,7 +24,7 @@
           <p class="eyebrow">PNG CODEC WORKBENCH</p>
           <h1 id="page-title">在浏览器里拆开一张 PNG</h1>
         </div>
-        <p>文件仅在本机处理。MoonBit 完成结构校验、像素解码、重新编码和结果复验。</p>
+        <p>文件仅在本机处理。MoonBit 完成结构校验、像素解码、文本元数据编辑和结果复验。</p>
       </section>
 
       <section class="work-grid">
@@ -95,15 +95,46 @@
             <span class="step">04</span>
             <h2 id="text-title">文本元数据</h2>
           </div>
-          <span class="table-note">tEXt · zTXt · iTXt</span>
+          <span class="table-note">查看并编辑 tEXt · zTXt · iTXt</span>
         </div>
-        <div class="table-wrap">
-          <table class="text-table">
-            <thead><tr><th>格式</th><th>关键字</th><th>内容</th><th>语言</th></tr></thead>
-            <tbody id="text-rows"></tbody>
-          </table>
-          <p id="text-empty" class="empty-note">这张图片没有文本元数据</p>
-        </div>
+        <fieldset id="text-editor" class="text-editor" disabled>
+          <form id="text-add-form" class="text-add-form">
+            <label class="editor-field">
+              <span>格式</span>
+              <select id="text-add-format">
+                <option value="itxt">iTXt · UTF-8</option>
+                <option value="itxt-zlib">iTXt · UTF-8 · zlib</option>
+                <option value="text">tEXt · Latin-1</option>
+                <option value="ztxt">zTXt · Latin-1 · zlib</option>
+              </select>
+            </label>
+            <label class="editor-field">
+              <span>关键字</span>
+              <input id="text-add-keyword" maxlength="79" required placeholder="例如 Title">
+            </label>
+            <label class="editor-field editor-field-wide">
+              <span>内容</span>
+              <textarea id="text-add-value" rows="3" placeholder="输入要写入 PNG 的文本"></textarea>
+            </label>
+            <div id="text-add-international" class="international-fields">
+              <label class="editor-field">
+                <span>语言标签（可选）</span>
+                <input id="text-add-language" placeholder="例如 zh-Hans">
+              </label>
+              <label class="editor-field">
+                <span>翻译后的关键字（可选）</span>
+                <input id="text-add-translated" placeholder="例如 标题">
+              </label>
+            </div>
+            <button class="primary-button text-add-button" type="submit">新增文本条目</button>
+          </form>
+          <div class="entry-list-heading">
+            <span>已有条目</span>
+            <span>修改后点击“保存”生成新的下载文件</span>
+          </div>
+          <div id="text-entries" class="text-entries"></div>
+          <p id="text-empty" class="empty-note">这张图片没有文本元数据，可以在上方新增</p>
+        </fieldset>
       </section>
     </main>
 

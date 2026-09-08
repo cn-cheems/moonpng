@@ -4,7 +4,10 @@ The workbench is a static page driven by the MoonBit JavaScript target. It
 loads PNG files locally, validates their structure and CRC values, decodes them
 to RGBA8 for canvas display, re-encodes the pixels, and decodes the result again
 to verify exact pixel equality. Validated `tEXt`, `zTXt`, and `iTXt` entries are
-shown in a separate table and retained in the downloaded PNG.
+shown in an editor and retained in the downloaded PNG. Entries can be added,
+updated, converted between Latin-1 and UTF-8 formats, compressed, or removed.
+Every change passes through the MoonBit metadata writer; validation failures
+leave the previous verified download available.
 
 From the repository root, build the browser entry point:
 

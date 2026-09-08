@@ -115,5 +115,7 @@ encoding, and pixel comparison all call the same `cn-cheems/moonpng` package as
 the command-line example and tests. Uploaded bytes do not leave the page. The
 demo applies tighter decode and text limits than the library defaults to keep
 the page responsive on ordinary devices. It also displays validated text
-entries and copies them into the re-encoded download before verifying pixel
-equality.
+entries and exposes add, edit, format-conversion, and removal controls. Each
+change is converted into `TextEntry` values and validated by the MoonBit
+metadata writer before a new download is exposed. Invalid edits leave the last
+verified download unchanged.
