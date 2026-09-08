@@ -71,6 +71,12 @@ pub(all) struct ChunkInfo {
   is_safe_to_copy : Bool
 } derive(Eq, @debug.Debug)
 
+pub(all) enum CompressionStrategy {
+  CompressionStored
+  CompressionFixed
+  CompressionAuto
+} derive(Eq, @debug.Debug)
+
 pub(all) enum DecodeError {
   InvalidContainer(PngError)
   InvalidDecodeLimits
@@ -130,11 +136,13 @@ pub(all) enum EncodeError {
   EncodePixelLengthMismatch(Int, Int)
   EncodeRowLengthMismatch(Int, Int, Int)
   EncodeInvalidIdatChunkSize(Int)
+  EncodeUnsupportedRowCompression
 } derive(Eq, @debug.Debug)
 pub fn EncodeError::message(Self) -> String
 
 pub(all) struct EncodeOptions {
   filter_strategy : FilterStrategy
+  compression_strategy : CompressionStrategy
 } derive(Eq, @debug.Debug)
 
 pub(all) enum FilterStrategy {

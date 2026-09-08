@@ -117,6 +117,28 @@ fn copy_range_for_test(data : Bytes, start : Int, length : Int) -> Bytes {
 }
 
 ///|
+fn encode_gray_with_compression_for_test(
+  pixels : Bytes,
+  strategy : @moonpng.CompressionStrategy,
+) -> Bytes raise {
+  let options : @moonpng.EncodeOptions = {
+    filter_strategy: @moonpng.FilterNone,
+    compression_strategy: strategy,
+  }
+  match
+    @moonpng.encode_with_options(
+      pixels.length().reinterpret_as_uint(),
+      1U,
+      @moonpng.PixelGray8,
+      pixels,
+      options,
+    ) {
+    Ok(png) => png
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
 fn append_chunk_for_test(
   output : Array[Byte],
   kind : Bytes,
@@ -922,7 +944,10 @@ test "round trip every encoder filter strategy" {
     @moonpng.FilterAdaptive,
   ]
   for strategy in strategies {
-    let options : @moonpng.EncodeOptions = { filter_strategy: strategy, }
+    let options : @moonpng.EncodeOptions = {
+      filter_strategy: strategy,
+      compression_strategy: @moonpng.CompressionStored,
+    }
     match @moonpng.encode_rgba8_with_options(2U, 2U, pixels, options) {
       Ok(png) =>
         match @moonpng.decode(png) {
@@ -930,6 +955,87 @@ test "round trip every encoder filter strategy" {
           Err(error) => fail(error.message())
         }
       Err(error) => fail(error.message())
+    }
+  }
+}
+
+///|
+test "select stored, fixed-Huffman, and automatic PNG compression" {
+  let repeated = Bytes::from_array(Array::make(1024, b'\x00'))
+  let repeated_stored = encode_gray_with_compression_for_test(
+    repeated,
+    @moonpng.CompressionStored,
+  )
+  let repeated_fixed = encode_gray_with_compression_for_test(
+    repeated,
+    @moonpng.CompressionFixed,
+  )
+  let repeated_auto = encode_gray_with_compression_for_test(
+    repeated,
+    @moonpng.CompressionAuto,
+  )
+  @test.assert_eq(repeated_fixed.length() < repeated_stored.length(), true)
+  @test.assert_eq(repeated_auto, repeated_fixed)
+  match @moonpng.inspect(repeated_fixed) {
+    Ok(info) => {
+      let idat = info.chunks[1]
+      @test.assert_eq(repeated_fixed[idat.data_offset + 2].to_int() & 7, 3)
+    }
+    Err(error) => fail(error.message())
+  }
+  match @moonpng.decode(repeated_fixed) {
+    Ok(image) => {
+      @test.assert_eq(image.width, 1024U)
+      @test.assert_eq(image.pixels.length(), 4096)
+      @test.assert_eq(image.pixels[0], b'\x00')
+      @test.assert_eq(image.pixels[4095], b'\xff')
+    }
+    Err(error) => fail(error.message())
+  }
+
+  let literal_source : Array[Byte] = []
+  for value = 144; value < 256; value = value + 1 {
+    literal_source.push(value.to_byte())
+  }
+  let literal_bytes = Bytes::from_array(literal_source)
+  let literal_stored = encode_gray_with_compression_for_test(
+    literal_bytes,
+    @moonpng.CompressionStored,
+  )
+  let literal_fixed = encode_gray_with_compression_for_test(
+    literal_bytes,
+    @moonpng.CompressionFixed,
+  )
+  let literal_auto = encode_gray_with_compression_for_test(
+    literal_bytes,
+    @moonpng.CompressionAuto,
+  )
+  @test.assert_eq(literal_stored.length() < literal_fixed.length(), true)
+  @test.assert_eq(literal_auto, literal_stored)
+}
+
+///|
+test "reject non-stored compression for row-oriented encoding" {
+  let strategies = [@moonpng.CompressionFixed, @moonpng.CompressionAuto]
+  for strategy in strategies {
+    let fragments : Array[Bytes] = []
+    let options : @moonpng.EncodeOptions = {
+      filter_strategy: @moonpng.FilterNone,
+      compression_strategy: strategy,
+    }
+    match
+      @moonpng.encode_rows_with_options(
+        1U,
+        1U,
+        @moonpng.PixelGray8,
+        options,
+        64,
+        _ => b"\x00",
+        fragment => fragments.push(fragment),
+      ) {
+      Err(@moonpng.EncodeUnsupportedRowCompression) =>
+        @test.assert_eq(fragments.length(), 0)
+      _ => fail("expected EncodeUnsupportedRowCompression")
     }
   }
 }
@@ -1078,6 +1184,7 @@ test "encode a wide row across stored blocks" {
   let fragments : Array[Bytes] = []
   let options : @moonpng.EncodeOptions = {
     filter_strategy: @moonpng.FilterNone,
+    compression_strategy: @moonpng.CompressionStored,
   }
   match
     @moonpng.encode_rows_with_options(

@@ -10,6 +10,8 @@
   and dynamic-Huffman blocks.
 - Added deterministic fixed-Huffman zlib compression with a bounded 32 KiB
   hash-chain LZ77 matcher and standalone round-trip coverage.
+- Added stored, fixed-Huffman, and shortest-output automatic compression
+  strategies for buffered PNG encoding.
 - Added Adler-32 validation, bounded back-references, and trailing-data checks.
 - Added all five PNG scanline filters and RGBA8 pixel output.
 - Added non-interlaced 8-bit grayscale, truecolor, grayscale-alpha, and RGBA

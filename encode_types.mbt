@@ -6,6 +6,7 @@ pub(all) enum EncodeError {
   EncodePixelLengthMismatch(Int, Int)
   EncodeRowLengthMismatch(Int, Int, Int)
   EncodeInvalidIdatChunkSize(Int)
+  EncodeUnsupportedRowCompression
 } derive(Debug, Eq)
 
 ///|
@@ -20,15 +21,24 @@ pub(all) enum FilterStrategy {
 } derive(Debug, Eq)
 
 ///|
+/// DEFLATE strategy used by the buffered PNG encoder.
+pub(all) enum CompressionStrategy {
+  CompressionStored
+  CompressionFixed
+  CompressionAuto
+} derive(Debug, Eq)
+
+///|
 /// Options controlling deterministic PNG encoding.
 pub(all) struct EncodeOptions {
   filter_strategy : FilterStrategy
+  compression_strategy : CompressionStrategy
 } derive(Debug, Eq)
 
 ///|
 /// Return the recommended deterministic encoder options.
 pub fn default_encode_options() -> EncodeOptions {
-  { filter_strategy: FilterAdaptive, }
+  { filter_strategy: FilterAdaptive, compression_strategy: CompressionStored, }
 }
 
 ///|
@@ -54,5 +64,7 @@ pub fn EncodeError::message(self : EncodeError) -> String {
       "row \{row} requires \{expected} bytes, got \{actual}"
     EncodeInvalidIdatChunkSize(size) =>
       "IDAT chunk size must be positive, got \{size}"
+    EncodeUnsupportedRowCompression =>
+      "row-oriented encoding currently supports stored compression only"
   }
 }

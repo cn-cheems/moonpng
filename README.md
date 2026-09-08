@@ -30,6 +30,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - offers fixed and adaptive selection across all five PNG row filters;
 - compresses standalone zlib streams with bounded LZ77 matching and fixed
   Huffman codes;
+- selects stored, fixed-Huffman, or shortest-output automatic compression for
+  buffered PNG encoding;
 - splits zlib output across caller-sized consecutive IDAT chunks;
 - encodes row-provided images into bounded output fragments without retaining
   the complete source image or compressed stream;
@@ -131,7 +133,21 @@ match @moonpng.encode_rgba8(1U, 1U, pixels) {
 The default encoder selects the lowest-cost filter for each row and uses stored
 DEFLATE blocks. Its output is deterministic and does not require a platform
 compression library. `encode_rgba8_with_options` can force None, Sub, Up,
-Average, or Paeth filtering when reproducible filter control is needed.
+Average, or Paeth filtering when reproducible filter control is needed. The
+same options select stored blocks, fixed-Huffman compression, or automatic
+comparison of both outputs:
+
+```moonbit
+let options : @moonpng.EncodeOptions = {
+  filter_strategy: @moonpng.FilterAdaptive,
+  compression_strategy: @moonpng.CompressionAuto,
+}
+let result = @moonpng.encode_rgba8_with_options(1U, 1U, pixels, options)
+```
+
+`CompressionAuto` chooses the shorter complete zlib stream and uses stored
+blocks when lengths tie. This makes the result deterministic while avoiding
+fixed-Huffman expansion on literal-heavy data.
 
 Use `encode` with `PixelGray8`, `PixelGrayAlpha8`, `PixelRgb8`, or `PixelRgba8`
 to avoid storing channels that an image does not need.
@@ -156,10 +172,12 @@ let result = @moonpng.encode_rows(
 )
 ```
 
-`encode_rows_with_options` also accepts a filter strategy and maximum IDAT
-payload size. Its working memory is bounded by the row width and IDAT limit,
-not image height. Because output is progressive, a bad row can be reported
-after the signature or earlier chunks have already reached the callback.
+`encode_rows_with_options` also accepts filter and compression strategies plus
+a maximum IDAT payload size. Its working memory is bounded by the row width and
+IDAT limit, not image height. Because output is progressive, a bad row can be
+reported after the signature or earlier chunks have already reached the
+callback. The row-oriented path currently requires `CompressionStored`; other
+compression strategies are rejected before any fragment is emitted.
 
 ## Inspect without decoding
 
@@ -202,9 +220,9 @@ match @moonpng.inflate_zlib(compressed) {
 
 The compressor searches a 32 KiB history window through bounded hash chains,
 emits matches from 3 through 258 bytes, and writes one fixed-Huffman DEFLATE
-block. It is currently a standalone API; PNG image and text encoders continue
-to use their existing stored-block path while compression strategy integration
-is developed.
+block. Buffered PNG encoding uses the same implementation for
+`CompressionFixed` and `CompressionAuto`. Text metadata compression and the
+bounded row-oriented encoder continue to use stored blocks.
 
 ## Architecture
 
@@ -221,8 +239,8 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 ## Roadmap
 
 1. Add broader conformance fixtures and property-based malformed-input tests.
-2. Integrate fixed-Huffman compression into buffered PNG encoding with an
-   explicit strategy option.
+2. Add streaming fixed-Huffman compression while preserving row-oriented
+   memory bounds.
 3. Add fuzzing, compression benchmarks, and dynamic-Huffman encoding.
 
 ## Project status

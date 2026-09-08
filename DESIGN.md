@@ -54,11 +54,14 @@ grayscale-alpha, RGB, or RGBA input before allocation. It writes the matching
 PNG color type without adding unused channels. For each row, the default
 strategy tries all five PNG filters and
 selects the lowest sum of absolute signed-byte magnitudes, breaking ties by
-filter number. The encoder then splits the filtered bytes into legal
-65,535-byte stored DEFLATE blocks, adds the zlib Adler-32 checksum, and writes
-IHDR, IDAT, and IEND chunks with CRC-32 values. Callers may bound IDAT payloads;
-the zlib stream is split at byte boundaries and the chunks remain consecutive.
-The same input and options always produce the same PNG bytes.
+filter number. The default compression strategy splits the filtered bytes into
+legal 65,535-byte stored DEFLATE blocks. Callers can instead request the
+fixed-Huffman compressor, or automatic selection that builds both streams and
+keeps the shorter one, preferring stored blocks on a tie. The encoder adds the
+zlib Adler-32 checksum and writes IHDR, IDAT, and IEND chunks with CRC-32
+values. Callers may bound IDAT payloads; the zlib stream is split at byte
+boundaries and the chunks remain consecutive. The same input and options always
+produce the same PNG bytes.
 
 `encode_rows_with_options` is the bounded counterpart for generated or large
 images. It pulls one exact-length row at a time, retains only that row and its
@@ -67,7 +70,10 @@ caller-sized IDAT payload buffer. Adler-32 is updated as filtered bytes pass
 through, so neither the full pixel input, filtered image, nor zlib stream is
 materialized. The output callback receives the PNG signature and complete PNG
 chunks in order. If a later row has the wrong length, the function returns an
-error but does not retract fragments already delivered to the callback.
+error but does not retract fragments already delivered to the callback. This
+path accepts only stored compression because fixed-Huffman matching currently
+requires the complete filtered input. Unsupported strategies fail before the
+signature is emitted.
 
 ## Compression core
 
@@ -79,11 +85,11 @@ bytes, and equal-length matches retain the nearest distance for deterministic
 output. Literal/length and distance codes are converted from canonical Huffman
 order before being written to the least-significant-bit-first DEFLATE stream.
 
-The initial compressor accepts a complete byte buffer and keeps one previous
-hash-chain link per input byte. It is exposed independently so its format and
-matching behavior can be tested before buffered PNG encoding adopts selectable
-compression strategies. Row-oriented PNG encoding remains on stored blocks to
-preserve its memory bound.
+The compressor accepts a complete byte buffer and keeps one previous hash-chain
+link per input byte. It is exposed independently and is also used by buffered
+PNG encoding. Automatic compression holds both candidate zlib streams briefly
+and selects by complete encoded length. Row-oriented PNG encoding remains on
+stored blocks to preserve its memory bound.
 
 ## Text metadata
 

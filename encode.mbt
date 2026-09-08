@@ -256,6 +256,9 @@ pub fn encode_rows_with_options(
     return Err(EncodeImageTooLarge(width, height))
   }
   let row_bytes = width_int * channels
+  if options.compression_strategy != CompressionStored {
+    return Err(EncodeUnsupportedRowCompression)
+  }
 
   emit(b"\x89PNG\r\n\x1a\n")
   emit(encode_chunk_bytes(b"IHDR", encode_ihdr_payload(width, height, format)))
@@ -439,7 +442,20 @@ pub fn encode_with_idat_chunk_size(
     previous_row = Some(current_row)
   }
 
-  let compressed = encode_stored_zlib(Bytes::from_array(raw))
+  let raw_bytes = Bytes::from_array(raw)
+  let compressed = match options.compression_strategy {
+    CompressionStored => encode_stored_zlib(raw_bytes)
+    CompressionFixed => compress_zlib_fixed(raw_bytes)
+    CompressionAuto => {
+      let stored = encode_stored_zlib(raw_bytes)
+      let fixed = compress_zlib_fixed(raw_bytes)
+      if fixed.length() < stored.length() {
+        fixed
+      } else {
+        stored
+      }
+    }
+  }
   let idat_count = (compressed.length() - 1) / idat_chunk_size + 1
   if compressed.length() > 0x7fffffff - 45 ||
     idat_count > (0x7fffffff - 45 - compressed.length()) / 12 {
