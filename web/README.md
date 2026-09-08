@@ -7,7 +7,9 @@ to verify exact pixel equality. Validated `tEXt`, `zTXt`, and `iTXt` entries are
 shown in an editor and retained in the downloaded PNG. Entries can be added,
 updated, converted between Latin-1 and UTF-8 formats, compressed, or removed.
 Every change passes through the MoonBit metadata writer; validation failures
-leave the previous verified download available.
+leave the previous verified download available. The primary download preserves
+IDAT and every non-text chunk byte-for-byte. A second download contains the
+deterministically re-encoded RGBA8 pixels for comparison and round-trip testing.
 
 From the repository root, build the browser entry point:
 

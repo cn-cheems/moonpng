@@ -32,7 +32,7 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - encodes row-provided images into bounded output fragments without retaining
   the complete source image or compressed stream;
 - includes a local browser workbench for upload, inspection, decoded preview,
-  interactive text metadata editing, deterministic re-encoding, and
+  lossless text metadata editing, deterministic pixel re-encoding, and
   pixel-level round-trip verification;
 - runs on MoonBit's native, JavaScript, Wasm, and Wasm GC targets.
 
@@ -66,9 +66,12 @@ can be used for the second command. The workbench starts with a generated
 sample and accepts local PNG files by picker or drag and drop. Uploaded files
 stay in the browser. Validated text metadata is displayed alongside the chunk
 table. Entries can be added, edited, converted between compressed and
-uncompressed formats, or removed before downloading the re-encoded image.
+uncompressed formats, or removed before downloading the result.
 Invalid keywords, encodings, language tags, and size-limit violations are
-reported without replacing the current download.
+reported without replacing the current download. The workbench offers two
+outputs: a metadata-only result that preserves IDAT and every non-text chunk
+byte-for-byte, and a separately re-encoded result that demonstrates the codec's
+pixel round trip.
 
 ## Decode an image
 

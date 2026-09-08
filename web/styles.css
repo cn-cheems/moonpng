@@ -248,13 +248,29 @@ h1 {
 .status[data-tone="error"] { color: var(--error); }
 .status[data-tone="working"] { color: var(--working); }
 
-.download {
+.download-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.download {
   flex: none;
   color: var(--accent-strong);
   font-size: 0.85rem;
   text-underline-offset: 4px;
 }
+
+.download-primary {
+  padding: 8px 10px;
+  color: #07110d;
+  background: var(--accent);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.download-primary:hover { background: var(--accent-strong); }
 
 .facts {
   margin: 0;
@@ -516,7 +532,7 @@ footer {
   .entry-card-heading { align-items: flex-start; flex-wrap: wrap; }
   .entry-actions { width: 100%; margin-left: 0; }
   .status-row { align-items: flex-start; flex-direction: column; }
-  .download { margin-left: 0; }
+  .download-actions { margin-left: 0; align-items: flex-start; flex-direction: column; }
   th, td { padding: 12px 14px; }
   footer { width: calc(100% - 20px); flex-direction: column; gap: 8px; }
 }

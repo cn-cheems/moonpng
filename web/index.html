@@ -44,7 +44,10 @@
           </div>
           <div class="status-row">
             <p id="status" class="status" data-tone="working" role="status">正在启动 MoonPNG…</p>
-            <a id="download" class="download" href="#" hidden>下载重编码结果</a>
+            <div class="download-actions">
+              <a id="download-lossless" class="download download-primary" href="#" hidden>下载无损元数据结果</a>
+              <a id="download-reencoded" class="download" href="#" hidden>下载像素重编码结果</a>
+            </div>
           </div>
         </article>
 
@@ -57,7 +60,7 @@
           </div>
           <dl class="facts">
             <div class="fact fact-wide"><dt>文件</dt><dd id="file-name">—</dd></div>
-            <div class="fact"><dt>原始大小</dt><dd id="source-size">—</dd></div>
+            <div class="fact"><dt>当前 PNG 大小</dt><dd id="source-size">—</dd></div>
             <div class="fact"><dt>图像尺寸</dt><dd id="dimensions">—</dd></div>
             <div class="fact"><dt>位深</dt><dd id="bit-depth">—</dd></div>
             <div class="fact"><dt>颜色类型</dt><dd id="color-format">—</dd></div>
@@ -65,7 +68,7 @@
             <div class="fact"><dt>Chunk 数量</dt><dd id="chunk-count">—</dd></div>
             <div class="fact"><dt>文本条目</dt><dd id="text-count">—</dd></div>
             <div class="fact"><dt>RGBA8 大小</dt><dd id="decoded-size">—</dd></div>
-            <div class="fact"><dt>重编码大小</dt><dd id="encoded-size">—</dd></div>
+            <div class="fact"><dt>像素重编码大小</dt><dd id="encoded-size">—</dd></div>
           </dl>
           <div class="pipeline" aria-label="处理步骤">
             <span>Inspect</span><i></i><span>Decode</span><i></i><span>Encode</span><i></i><span>Verify</span>

@@ -107,6 +107,16 @@ fn append_bytes_for_test(output : Array[Byte], data : Bytes) -> Unit {
 }
 
 ///|
+fn copy_range_for_test(data : Bytes, start : Int, length : Int) -> Bytes {
+  let output : Array[Byte] = []
+  output.reserve_capacity(length)
+  for index = 0; index < length; index = index + 1 {
+    output.push(data[start + index])
+  }
+  Bytes::from_array(output)
+}
+
+///|
 fn append_chunk_for_test(
   output : Array[Byte],
   kind : Bytes,
@@ -129,6 +139,46 @@ fn png_with_ancillary_for_test(kind : Bytes, payload : Bytes) -> Bytes {
   append_chunk_for_test(output, b"IDAT", b"")
   append_chunk_for_test(output, b"IEND", b"")
   Bytes::from_array(output)
+}
+
+///|
+fn insert_ancillary_before_idat_for_test(
+  data : Bytes,
+  kind : Bytes,
+  payload : Bytes,
+) -> Bytes raise {
+  let info = match @moonpng.inspect(data) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let output : Array[Byte] = []
+  append_bytes_for_test(output, copy_range_for_test(data, 0, 8))
+  let mut inserted = false
+  for chunk in info.chunks {
+    if !inserted && chunk.kind == "IDAT" {
+      append_chunk_for_test(output, kind, payload)
+      inserted = true
+    }
+    append_bytes_for_test(
+      output,
+      copy_range_for_test(data, chunk.offset, chunk.length + 12),
+    )
+  }
+  Bytes::from_array(output)
+}
+
+///|
+fn chunk_bytes_for_test(data : Bytes, kind : String) -> Bytes raise {
+  let info = match @moonpng.inspect(data) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  for chunk in info.chunks {
+    if chunk.kind == kind {
+      return copy_range_for_test(data, chunk.offset, chunk.length + 12)
+    }
+  }
+  fail("missing chunk: " + kind)
 }
 
 ///|
@@ -1111,6 +1161,59 @@ test "add and replace text without changing decoded pixels" {
     Err(error) => fail(error.message())
   }
   match @moonpng.decode(replaced) {
+    Ok(image) => @test.assert_eq(image.pixels, pixels)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "replace text preserves every non-text chunk byte-for-byte" {
+  let pixels = b"\x10\x20\x30\xff\x40\x50\x60\x80"
+  let encoded = match @moonpng.encode_rgba8(2U, 1U, pixels) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let with_dimensions = insert_ancillary_before_idat_for_test(
+    encoded, b"pHYs", b"\x00\x00\x0b\x13\x00\x00\x0b\x13\x01",
+  )
+  let source = insert_ancillary_before_idat_for_test(
+    with_dimensions, b"vpAg", b"private payload",
+  )
+  let source = match
+    @moonpng.add_text_entries(source, [
+      @moonpng.latin1_text("Author", "cn-cheems"),
+    ]) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let header_chunk = chunk_bytes_for_test(source, "IHDR")
+  let physical_chunk = chunk_bytes_for_test(source, "pHYs")
+  let private_chunk = chunk_bytes_for_test(source, "vpAg")
+  let image_chunk = chunk_bytes_for_test(source, "IDAT")
+  let end_chunk = chunk_bytes_for_test(source, "IEND")
+  let updated = match
+    @moonpng.replace_text_entries(source, [
+      @moonpng.international_text(
+        "Title",
+        "MoonPNG 无损元数据编辑",
+        language_tag="zh-Hans",
+        translated_keyword="标题",
+        compressed=true,
+      ),
+    ]) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  @test.assert_eq(
+    copy_range_for_test(updated, 0, 8),
+    copy_range_for_test(source, 0, 8),
+  )
+  @test.assert_eq(chunk_bytes_for_test(updated, "IHDR"), header_chunk)
+  @test.assert_eq(chunk_bytes_for_test(updated, "pHYs"), physical_chunk)
+  @test.assert_eq(chunk_bytes_for_test(updated, "vpAg"), private_chunk)
+  @test.assert_eq(chunk_bytes_for_test(updated, "IDAT"), image_chunk)
+  @test.assert_eq(chunk_bytes_for_test(updated, "IEND"), end_chunk)
+  match @moonpng.decode(updated) {
     Ok(image) => @test.assert_eq(image.pixels, pixels)
     Err(error) => fail(error.message())
   }

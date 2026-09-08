@@ -63,11 +63,14 @@ extern "js" fn browser_begin_file(name : String, source_size : Int) -> Unit =
   #|   for (const id of ["dimensions", "bit-depth", "color-format", "interlace", "decoded-size", "encoded-size", "chunk-count", "text-count"]) {
   #|     document.getElementById(id).textContent = "—";
   #|   }
-  #|   const link = document.getElementById("download");
-  #|   link.hidden = true;
-  #|   if (globalThis.__moonpngDownloadUrl) {
-  #|     URL.revokeObjectURL(globalThis.__moonpngDownloadUrl);
-  #|     globalThis.__moonpngDownloadUrl = undefined;
+  #|   for (const id of ["download-lossless", "download-reencoded"]) {
+  #|     document.getElementById(id).hidden = true;
+  #|   }
+  #|   for (const key of ["__moonpngLosslessUrl", "__moonpngReencodedUrl"]) {
+  #|     if (globalThis[key]) {
+  #|       URL.revokeObjectURL(globalThis[key]);
+  #|       globalThis[key] = undefined;
+  #|     }
   #|   }
   #|   document.getElementById("preview").hidden = true;
   #|   const empty = document.getElementById("preview-empty");
@@ -322,16 +325,27 @@ extern "js" fn browser_draw_rgba(
   #| }
 
 ///|
-extern "js" fn browser_set_download(data : Bytes, name : String) -> Unit =
-  #| function(data, name) {
-  #|   if (globalThis.__moonpngDownloadUrl) URL.revokeObjectURL(globalThis.__moonpngDownloadUrl);
-  #|   const url = URL.createObjectURL(new Blob([data], { type: "image/png" }));
-  #|   globalThis.__moonpngDownloadUrl = url;
-  #|   const link = document.getElementById("download");
-  #|   link.href = url;
+extern "js" fn browser_set_downloads(
+  lossless : Bytes,
+  reencoded : Bytes,
+  name : String,
+) -> Unit =
+  #| function(lossless, reencoded, name) {
+  #|   if (globalThis.__moonpngLosslessUrl) URL.revokeObjectURL(globalThis.__moonpngLosslessUrl);
+  #|   if (globalThis.__moonpngReencodedUrl) URL.revokeObjectURL(globalThis.__moonpngReencodedUrl);
+  #|   const losslessUrl = URL.createObjectURL(new Blob([lossless], { type: "image/png" }));
+  #|   const reencodedUrl = URL.createObjectURL(new Blob([reencoded], { type: "image/png" }));
+  #|   globalThis.__moonpngLosslessUrl = losslessUrl;
+  #|   globalThis.__moonpngReencodedUrl = reencodedUrl;
   #|   const stem = name.toLowerCase().endsWith(".png") ? name.slice(0, -4) : name;
-  #|   link.download = `${stem}-moonpng.png`;
-  #|   link.hidden = false;
+  #|   const losslessLink = document.getElementById("download-lossless");
+  #|   losslessLink.href = losslessUrl;
+  #|   losslessLink.download = `${stem}-metadata.png`;
+  #|   losslessLink.hidden = false;
+  #|   const reencodedLink = document.getElementById("download-reencoded");
+  #|   reencodedLink.href = reencodedUrl;
+  #|   reencodedLink.download = `${stem}-reencoded.png`;
+  #|   reencodedLink.hidden = false;
   #| }
 
 ///|
@@ -484,7 +498,7 @@ fn browser_save_text_entry(
       present_png(
         browser_current_name.val,
         result,
-        "文本元数据已更新，下载文件已重新生成。",
+        "文本元数据已更新，无损版与重编码版均已重新生成。",
       )
     }
   }
@@ -525,7 +539,7 @@ fn browser_delete_text_entry(index : Int) -> Unit {
       present_png(
         browser_current_name.val,
         result,
-        "文本条目已删除，下载文件已重新生成。",
+        "文本条目已删除，无损版与重编码版均已重新生成。",
       )
   }
 }
@@ -629,9 +643,9 @@ fn present_png(name : String, data : Bytes, success_message : String) -> Unit {
                       info.chunks.length(),
                       text_entries.length(),
                     )
-                    browser_current_png.val = Some(encoded)
+                    browser_current_png.val = Some(data)
                     browser_current_name.val = name
-                    browser_set_download(encoded, name)
+                    browser_set_downloads(data, encoded, name)
                     browser_set_text_editor_enabled(true)
                     browser_set_status("success", success_message)
                   } else {

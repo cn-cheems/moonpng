@@ -118,4 +118,7 @@ the page responsive on ordinary devices. It also displays validated text
 entries and exposes add, edit, format-conversion, and removal controls. Each
 change is converted into `TextEntry` values and validated by the MoonBit
 metadata writer before a new download is exposed. Invalid edits leave the last
-verified download unchanged.
+verified download unchanged. The metadata-only download is produced directly
+from the current validated PNG, so IDAT and every non-text chunk remain
+byte-for-byte identical. A separate pixel re-encoding remains available to
+demonstrate the complete codec pipeline without conflating the two operations.

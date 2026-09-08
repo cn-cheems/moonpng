@@ -38,4 +38,6 @@
   display and preservation during re-encoding.
 - Added an interactive browser metadata editor for adding, updating, converting,
   compressing, and removing PNG text entries with inline validation feedback.
+- Added separate lossless metadata and pixel re-encoding downloads, with
+  byte-exact preservation tests for IDAT and unrelated ancillary chunks.
 - Added a decoded-pixel CLI demo and decoder design documentation.
