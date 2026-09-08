@@ -46,6 +46,9 @@ fn encode_copy_range(data : Bytes, offset : Int, length : Int) -> Bytes {
 fn encode_stored_zlib(raw : Bytes) -> Bytes {
   let output : Array[Byte] = [b'\x78', b'\x01']
   let mut offset = 0
+  if raw.length() == 0 {
+    encode_append_bytes(output, b"\x01\x00\x00\xff\xff")
+  }
   while offset < raw.length() {
     let remaining = raw.length() - offset
     let block_length = if remaining > 65535 { 65535 } else { remaining }

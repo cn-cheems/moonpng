@@ -63,6 +63,7 @@
             <div class="fact"><dt>颜色类型</dt><dd id="color-format">—</dd></div>
             <div class="fact"><dt>隔行方式</dt><dd id="interlace">—</dd></div>
             <div class="fact"><dt>Chunk 数量</dt><dd id="chunk-count">—</dd></div>
+            <div class="fact"><dt>文本条目</dt><dd id="text-count">—</dd></div>
             <div class="fact"><dt>RGBA8 大小</dt><dd id="decoded-size">—</dd></div>
             <div class="fact"><dt>重编码大小</dt><dd id="encoded-size">—</dd></div>
           </dl>
@@ -85,6 +86,23 @@
             <thead><tr><th>#</th><th>类型</th><th>数据长度</th><th>起始偏移</th><th>角色</th><th>CRC</th></tr></thead>
             <tbody id="chunk-rows"></tbody>
           </table>
+        </div>
+      </section>
+
+      <section class="panel text-panel" aria-labelledby="text-title">
+        <div class="panel-heading">
+          <div>
+            <span class="step">04</span>
+            <h2 id="text-title">文本元数据</h2>
+          </div>
+          <span class="table-note">tEXt · zTXt · iTXt</span>
+        </div>
+        <div class="table-wrap">
+          <table class="text-table">
+            <thead><tr><th>格式</th><th>关键字</th><th>内容</th><th>语言</th></tr></thead>
+            <tbody id="text-rows"></tbody>
+          </table>
+          <p id="text-empty" class="empty-note">这张图片没有文本元数据</p>
         </div>
       </section>
     </main>

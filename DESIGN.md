@@ -69,6 +69,20 @@ materialized. The output callback receives the PNG signature and complete PNG
 chunks in order. If a later row has the wrong length, the function returns an
 error but does not retract fragments already delivered to the callback.
 
+## Text metadata
+
+Text extraction starts with strict container inspection, then parses `tEXt`,
+`zTXt`, and `iTXt` chunks in file order. Keywords, Latin-1 text, UTF-8 fields,
+compression flags, methods, and language tags are validated before an entry is
+returned. Compressed text uses the same zlib decoder as image data, with
+independent limits for entry count, encoded bytes, and decoded bytes.
+
+The metadata writer validates every field before producing output. Addition and
+replacement insert complete text chunks before the first IDAT chunk, preserving
+all unrelated chunks and image data byte-for-byte. Compressed entries use the
+deterministic stored-DEFLATE encoder, so identical input produces identical PNG
+bytes.
+
 ## Security invariants
 
 - No chunk payload is read before its declared range and CRC are validated.
@@ -79,6 +93,8 @@ error but does not retract fragments already delivered to the callback.
 - The inflated byte count must exactly match the expected scanline layout.
 - Every Adam7 pass is bounded before slicing or allocating its scanlines.
 - Palette indices are checked before color or alpha entries are accessed.
+- Text chunk count, encoded text, and decoded text have independent limits.
+- Text fields are validated before writers allocate the output PNG.
 - Row-oriented encoding retains memory proportional to row width and the
   configured IDAT payload limit, independent of image height.
 - Unsupported formats fail explicitly rather than producing approximate pixels.
@@ -97,5 +113,7 @@ JavaScript backend. Browser bindings are limited to file selection, canvas
 painting, table updates, and download creation; parsing, checksums, decoding,
 encoding, and pixel comparison all call the same `cn-cheems/moonpng` package as
 the command-line example and tests. Uploaded bytes do not leave the page. The
-demo applies tighter decode limits than the library defaults to keep the page
-responsive on ordinary devices.
+demo applies tighter decode and text limits than the library defaults to keep
+the page responsive on ordinary devices. It also displays validated text
+entries and copies them into the re-encoded download before verifying pixel
+equality.

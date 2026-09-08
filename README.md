@@ -22,6 +22,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - downsamples 16-bit channels to RGBA8 using the most significant byte;
 - validates and expands `PLTE` palettes;
 - supports `tRNS` transparency for grayscale, truecolor, and indexed images;
+- reads, validates, adds, and replaces `tEXt`, `zTXt`, and `iTXt` metadata,
+  including bounded zlib decompression and UTF-8 validation;
 - converts decoded output to row-major RGBA8;
 - deterministically encodes 8-bit grayscale, grayscale-alpha, RGB, and RGBA
   pixels using their native PNG color types;
@@ -61,7 +63,8 @@ python3 -m http.server 8000
 Open <http://localhost:8000/web/>. On Windows, `py -3 -m http.server 8000`
 can be used for the second command. The workbench starts with a generated
 sample and accepts local PNG files by picker or drag and drop. Uploaded files
-stay in the browser.
+stay in the browser. Validated text metadata is displayed alongside the chunk
+table and retained in downloaded re-encoded images.
 
 ## Decode an image
 
@@ -80,6 +83,31 @@ match @moonpng.decode(png_bytes) {
 
 `DecodedImage.pixels` stores four bytes per pixel in red, green, blue, alpha
 order. Rows are contiguous from top to bottom.
+
+## Read and write text metadata
+
+```moonbit
+let entries = [
+  @moonpng.latin1_text("Author", "cn-cheems"),
+  @moonpng.international_text(
+    "Title",
+    "MoonPNG 示例",
+    language_tag="zh-Hans",
+    translated_keyword="标题",
+  ),
+]
+match @moonpng.add_text_entries(png_bytes, entries) {
+  Ok(updated) => println("updated PNG: \{updated.length()} bytes")
+  Err(error) => println(error.message())
+}
+```
+
+`read_text_entries` returns every textual chunk in file order.
+`replace_text_entries` removes existing textual chunks and inserts the supplied
+entries before image data while preserving unrelated chunks byte-for-byte. Set
+`compressed=true` on either entry constructor for `zTXt` or compressed `iTXt`.
+`read_text_entries_with_limits` lets applications bound entry count and both
+encoded and decoded text sizes independently.
 
 ## Encode an image
 
@@ -168,8 +196,8 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add a reusable PNG metadata reader and writer.
-2. Add conformance fixtures, fuzzing, and benchmarks.
+1. Add broader conformance fixtures and property-based malformed-input tests.
+2. Add fuzzing, benchmarks, and an optimized DEFLATE encoder.
 
 ## Project status
 

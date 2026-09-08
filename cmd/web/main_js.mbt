@@ -54,7 +54,7 @@ extern "js" fn browser_begin_file(name : String, source_size : Int) -> Unit =
   #| function(name, sourceSize) {
   #|   document.getElementById("file-name").textContent = name;
   #|   document.getElementById("source-size").textContent = sourceSize.toLocaleString() + " B";
-  #|   for (const id of ["dimensions", "bit-depth", "color-format", "interlace", "decoded-size", "encoded-size", "chunk-count"]) {
+  #|   for (const id of ["dimensions", "bit-depth", "color-format", "interlace", "decoded-size", "encoded-size", "chunk-count", "text-count"]) {
   #|     document.getElementById(id).textContent = "—";
   #|   }
   #|   const link = document.getElementById("download");
@@ -73,6 +73,33 @@ extern "js" fn browser_begin_file(name : String, source_size : Int) -> Unit =
 extern "js" fn browser_clear_chunks() -> Unit =
   #| function() {
   #|   document.getElementById("chunk-rows").replaceChildren();
+  #| }
+
+///|
+extern "js" fn browser_clear_text_entries() -> Unit =
+  #| function() {
+  #|   document.getElementById("text-rows").replaceChildren();
+  #|   document.getElementById("text-empty").hidden = false;
+  #| }
+
+///|
+extern "js" fn browser_add_text_entry(
+  format : String,
+  keyword : String,
+  text : String,
+  language : String,
+) -> Unit =
+  #| function(format, keyword, text, language) {
+  #|   const row = document.createElement("tr");
+  #|   for (const [value, className] of [[format, ""], [keyword, "keyword-cell"], [text, "text-cell"], [language || "—", ""]]) {
+  #|     const cell = document.createElement("td");
+  #|     cell.textContent = value;
+  #|     cell.title = value;
+  #|     if (className) cell.className = className;
+  #|     row.appendChild(cell);
+  #|   }
+  #|   document.getElementById("text-rows").appendChild(row);
+  #|   document.getElementById("text-empty").hidden = true;
   #| }
 
 ///|
@@ -114,8 +141,9 @@ extern "js" fn browser_present_summary(
   decoded_size : Int,
   encoded_size : Int,
   chunk_count : Int,
+  text_count : Int,
 ) -> Unit =
-  #| function(name, sourceSize, width, height, bitDepth, colorFormat, interlace, decodedSize, encodedSize, chunkCount) {
+  #| function(name, sourceSize, width, height, bitDepth, colorFormat, interlace, decodedSize, encodedSize, chunkCount, textCount) {
   #|   const values = {
   #|     "file-name": name,
   #|     "source-size": sourceSize.toLocaleString() + " B",
@@ -126,6 +154,7 @@ extern "js" fn browser_present_summary(
   #|     "decoded-size": decodedSize.toLocaleString() + " B",
   #|     "encoded-size": encodedSize.toLocaleString() + " B",
   #|     "chunk-count": String(chunkCount),
+  #|     "text-count": String(textCount),
   #|   };
   #|   for (const [id, value] of Object.entries(values)) {
   #|     document.getElementById(id).textContent = value;
@@ -193,6 +222,16 @@ fn interlace_name(interlace : Byte) -> String {
 }
 
 ///|
+fn text_format_name(format : @moonpng.TextFormat) -> String {
+  match format {
+    @moonpng.TextLatin1 => "tEXt"
+    @moonpng.TextLatin1Compressed => "zTXt"
+    @moonpng.TextInternational => "iTXt"
+    @moonpng.TextInternationalCompressed => "iTXt · zlib"
+  }
+}
+
+///|
 fn browser_limits() -> @moonpng.DecodeLimits {
   {
     max_chunk_size: 16 * 1024 * 1024,
@@ -204,11 +243,21 @@ fn browser_limits() -> @moonpng.DecodeLimits {
 }
 
 ///|
+fn browser_text_limits() -> @moonpng.TextLimits {
+  {
+    max_entries: 128,
+    max_encoded_bytes: 4 * 1024 * 1024,
+    max_decoded_bytes: 8 * 1024 * 1024,
+  }
+}
+
+///|
 fn present_png(name : String, data : Bytes) -> Unit {
   browser_set_busy(true)
   browser_begin_file(name, data.length())
   browser_set_status("working", "正在校验 PNG 结构与校验和…")
   browser_clear_chunks()
+  browser_clear_text_entries()
   match @moonpng.inspect(data) {
     Err(error) => {
       browser_set_status("error", "结构校验失败：\{error.message()}")
@@ -222,6 +271,26 @@ fn present_png(name : String, data : Bytes) -> Unit {
           chunk.length,
           chunk.offset,
           chunk.is_critical,
+        )
+      }
+      let text_entries = match
+        @moonpng.read_text_entries_with_limits(data, browser_text_limits()) {
+        Err(error) => {
+          browser_set_status(
+            "error",
+            "文本元数据校验失败：\{error.message()}",
+          )
+          browser_set_busy(false)
+          return
+        }
+        Ok(value) => value
+      }
+      for entry in text_entries {
+        browser_add_text_entry(
+          text_format_name(entry.format),
+          entry.keyword,
+          entry.text,
+          entry.language_tag,
         )
       }
       browser_set_status("working", "结构有效，正在解码像素…")
@@ -244,6 +313,18 @@ fn present_png(name : String, data : Bytes) -> Unit {
               browser_set_busy(false)
             }
             Ok(encoded) => {
+              let encoded = match
+                @moonpng.replace_text_entries(encoded, text_entries) {
+                Err(error) => {
+                  browser_set_status(
+                    "error",
+                    "文本元数据写入失败：\{error.message()}",
+                  )
+                  browser_set_busy(false)
+                  return
+                }
+                Ok(value) => value
+              }
               match @moonpng.decode_with_limits(encoded, browser_limits()) {
                 Err(error) =>
                   browser_set_status(
@@ -263,6 +344,7 @@ fn present_png(name : String, data : Bytes) -> Unit {
                       image.pixels.length(),
                       encoded.length(),
                       info.chunks.length(),
+                      text_entries.length(),
                     )
                     browser_set_download(encoded, name)
                     browser_set_status(
@@ -318,7 +400,24 @@ fn sample_png() -> Result[Bytes, @moonpng.EncodeError] {
 fn main {
   browser_bind_file_handler(present_png)
   match sample_png() {
-    Ok(png) => present_png("moonpng-sample.png", png)
+    Ok(png) =>
+      match
+        @moonpng.add_text_entries(png, [
+          @moonpng.latin1_text("Software", "MoonPNG"),
+          @moonpng.international_text(
+            "Title",
+            "MoonPNG 浏览器示例",
+            language_tag="zh-Hans",
+            translated_keyword="标题",
+          ),
+        ]) {
+        Ok(with_text) => present_png("moonpng-sample.png", with_text)
+        Err(error) =>
+          browser_set_status(
+            "error",
+            "示例元数据生成失败：\{error.message()}",
+          )
+      }
     Err(error) =>
       browser_set_status(
         "error",

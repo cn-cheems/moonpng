@@ -119,6 +119,19 @@ fn append_chunk_for_test(
 }
 
 ///|
+fn png_with_ancillary_for_test(kind : Bytes, payload : Bytes) -> Bytes {
+  let output : Array[Byte] = []
+  append_bytes_for_test(output, b"\x89PNG\r\n\x1a\n")
+  append_chunk_for_test(
+    output, b"IHDR", b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00",
+  )
+  append_chunk_for_test(output, kind, payload)
+  append_chunk_for_test(output, b"IDAT", b"")
+  append_chunk_for_test(output, b"IEND", b"")
+  Bytes::from_array(output)
+}
+
+///|
 fn stored_zlib_for_test(raw : Bytes) -> Bytes {
   let output : Array[Byte] = [b'\x78', b'\x01', b'\x01']
   let length = raw.length()
@@ -1008,5 +1021,178 @@ test "reject invalid RGBA8 encode input" {
     ) {
     Err(@moonpng.EncodeInvalidIdatChunkSize(0)) => ()
     _ => fail("expected EncodeInvalidIdatChunkSize")
+  }
+}
+
+///|
+test "round trip every PNG text format" {
+  let entries : Array[@moonpng.TextEntry] = [
+    @moonpng.latin1_text("Author", "René"),
+    @moonpng.latin1_text("Description", "MoonPNG metadata", compressed=true),
+    @moonpng.international_text(
+      "Title",
+      "月亮图片",
+      language_tag="zh-Hans",
+      translated_keyword="标题",
+    ),
+    @moonpng.international_text(
+      "Comment",
+      "こんにちは PNG",
+      language_tag="ja",
+      translated_keyword="コメント",
+      compressed=true,
+    ),
+    @moonpng.latin1_text("Disclaimer", "", compressed=true),
+  ]
+  match @moonpng.replace_text_entries(valid_structural_png(), entries) {
+    Err(error) => fail(error.message())
+    Ok(png) => {
+      match @moonpng.inspect(png) {
+        Err(error) => fail(error.message())
+        Ok(info) => {
+          @test.assert_eq(info.chunks.length(), 8)
+          @test.assert_eq(info.chunks[1].kind, "tEXt")
+          @test.assert_eq(info.chunks[2].kind, "zTXt")
+          @test.assert_eq(info.chunks[3].kind, "iTXt")
+          @test.assert_eq(info.chunks[4].kind, "iTXt")
+          @test.assert_eq(info.chunks[5].kind, "zTXt")
+          @test.assert_eq(info.chunks[6].kind, "IDAT")
+        }
+      }
+      match @moonpng.read_text_entries(png) {
+        Err(error) => fail(error.message())
+        Ok(decoded) => @test.assert_eq(decoded, entries)
+      }
+    }
+  }
+}
+
+///|
+test "add and replace text without changing decoded pixels" {
+  let pixels = b"\x11\x22\x33\x44\x55\x66\x77\x88"
+  let source = match @moonpng.encode_rgba8(2U, 1U, pixels) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let with_author = match
+    @moonpng.add_text_entries(source, [
+      @moonpng.latin1_text("Author", "cn-cheems"),
+    ]) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let with_both = match
+    @moonpng.add_text_entries(with_author, [
+      @moonpng.international_text("Title", "MoonPNG 示例"),
+    ]) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  match @moonpng.read_text_entries(with_both) {
+    Ok(entries) => {
+      @test.assert_eq(entries.length(), 2)
+      @test.assert_eq(entries[0].keyword, "Author")
+      @test.assert_eq(entries[1].text, "MoonPNG 示例")
+    }
+    Err(error) => fail(error.message())
+  }
+  let replaced = match
+    @moonpng.replace_text_entries(with_both, [
+      @moonpng.latin1_text("Software", "MoonPNG"),
+    ]) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  match @moonpng.read_text_entries(replaced) {
+    Ok(entries) => {
+      @test.assert_eq(entries.length(), 1)
+      @test.assert_eq(entries[0].keyword, "Software")
+    }
+    Err(error) => fail(error.message())
+  }
+  match @moonpng.decode(replaced) {
+    Ok(image) => @test.assert_eq(image.pixels, pixels)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "reject invalid text entries before writing" {
+  match
+    @moonpng.add_text_entries(valid_structural_png(), [
+      @moonpng.latin1_text(" bad", "value"),
+    ]) {
+    Err(@moonpng.TextInvalidKeyword(0)) => ()
+    _ => fail("expected TextInvalidKeyword")
+  }
+  match
+    @moonpng.add_text_entries(valid_structural_png(), [
+      @moonpng.latin1_text("Title", "中文"),
+    ]) {
+    Err(@moonpng.TextInvalidLatin1("text")) => ()
+    _ => fail("expected TextInvalidLatin1")
+  }
+  let invalid_fields : @moonpng.TextEntry = {
+    format: @moonpng.TextLatin1,
+    keyword: "Title",
+    text: "value",
+    language_tag: "en",
+    translated_keyword: "Title",
+  }
+  match @moonpng.add_text_entries(valid_structural_png(), [invalid_fields]) {
+    Err(@moonpng.TextUnexpectedInternationalFields(0)) => ()
+    _ => fail("expected TextUnexpectedInternationalFields")
+  }
+}
+
+///|
+test "reject malformed compressed and international text chunks" {
+  let unsupported = png_with_ancillary_for_test(
+    b"zTXt", b"Comment\x00\x01compressed",
+  )
+  match @moonpng.read_text_entries(unsupported) {
+    Err(@moonpng.TextUnsupportedCompression("zTXt", b'\x01', _)) => ()
+    _ => fail("expected TextUnsupportedCompression")
+  }
+  let invalid_flag = png_with_ancillary_for_test(
+    b"iTXt", b"Comment\x00\x02\x00\x00\x00text",
+  )
+  match @moonpng.read_text_entries(invalid_flag) {
+    Err(@moonpng.TextInvalidCompressionFlag(b'\x02', _)) => ()
+    _ => fail("expected TextInvalidCompressionFlag")
+  }
+  let invalid_utf8 = png_with_ancillary_for_test(
+    b"iTXt", b"Title\x00\x00\x00\x00\x00\xff",
+  )
+  match @moonpng.read_text_entries(invalid_utf8) {
+    Err(@moonpng.TextInvalidUtf8("international text")) => ()
+    _ => fail("expected TextInvalidUtf8")
+  }
+  let invalid_language = png_with_ancillary_for_test(
+    b"iTXt", b"Title\x00\x00\x00zh_CN\x00\x00text",
+  )
+  match @moonpng.read_text_entries(invalid_language) {
+    Err(@moonpng.TextInvalidLanguageTag(_)) => ()
+    _ => fail("expected TextInvalidLanguageTag")
+  }
+}
+
+///|
+test "bound decompressed PNG text" {
+  let source = match
+    @moonpng.add_text_entries(valid_structural_png(), [
+      @moonpng.latin1_text("Description", "A".repeat(128), compressed=true),
+    ]) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let limits : @moonpng.TextLimits = {
+    max_entries: 4,
+    max_encoded_bytes: 4096,
+    max_decoded_bytes: 32,
+  }
+  match @moonpng.read_text_entries_with_limits(source, limits) {
+    Err(@moonpng.TextDecodedDataTooLarge(32)) => ()
+    _ => fail("expected TextDecodedDataTooLarge")
   }
 }

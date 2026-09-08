@@ -32,4 +32,8 @@
   cross-block scanline handling, and explicit row-length validation.
 - Added a MoonBit-driven browser workbench with local file loading, decoded
   canvas preview, chunk inspection, re-encoding, and pixel round-trip checks.
+- Added bounded `tEXt`, `zTXt`, and `iTXt` extraction with Latin-1, UTF-8,
+  language-tag, compression-method, and aggregate-size validation.
+- Added deterministic text insertion and replacement plus browser metadata
+  display and preservation during re-encoding.
 - Added a decoded-pixel CLI demo and decoder design documentation.

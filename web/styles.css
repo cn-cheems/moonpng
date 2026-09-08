@@ -299,7 +299,7 @@ h1 {
   background: linear-gradient(90deg, var(--accent), var(--line));
 }
 
-.chunks-panel { margin-top: 18px; }
+.chunks-panel, .text-panel { margin-top: 18px; }
 .table-note { color: var(--muted); font-size: 0.76rem; }
 .table-wrap { overflow-x: auto; }
 
@@ -331,6 +331,22 @@ td:nth-child(2) { color: var(--accent-strong); font-weight: 750; }
 td[data-role="critical"] { color: #f0c66d; }
 td[data-role="ancillary"] { color: #8da0ae; }
 .crc-ok { color: var(--accent); }
+
+.text-table .keyword-cell { color: var(--accent-strong); }
+.text-table .text-cell {
+  min-width: 320px;
+  max-width: 700px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.empty-note {
+  margin: 0;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  text-align: center;
+}
 
 footer {
   width: min(1320px, calc(100% - 48px));

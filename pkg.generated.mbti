@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn add_text_entries(Bytes, Array[TextEntry]) -> Result[Bytes, TextError]
+
 pub fn adler32(Bytes) -> UInt
 
 pub fn crc32(Bytes) -> UInt
@@ -17,6 +19,8 @@ pub fn decode_with_limits(Bytes, DecodeLimits) -> Result[DecodedImage, DecodeErr
 pub fn default_decode_limits() -> DecodeLimits
 
 pub fn default_encode_options() -> EncodeOptions
+
+pub fn default_text_limits() -> TextLimits
 
 pub fn encode(UInt, UInt, PixelFormat, Bytes) -> Result[Bytes, EncodeError]
 
@@ -39,6 +43,16 @@ pub fn inflate_zlib_with_limit(Bytes, max_output_size~ : Int) -> Result[Bytes, D
 pub fn inspect(Bytes) -> Result[PngInfo, PngError]
 
 pub fn inspect_with_limits(Bytes, max_chunk_size~ : Int, max_chunks~ : Int) -> Result[PngInfo, PngError]
+
+pub fn international_text(String, String, language_tag? : String, translated_keyword? : String, compressed? : Bool) -> TextEntry
+
+pub fn latin1_text(String, String, compressed? : Bool) -> TextEntry
+
+pub fn read_text_entries(Bytes) -> Result[Array[TextEntry], TextError]
+
+pub fn read_text_entries_with_limits(Bytes, TextLimits) -> Result[Array[TextEntry], TextError]
+
+pub fn replace_text_entries(Bytes, Array[TextEntry]) -> Result[Bytes, TextError]
 
 // Errors
 
@@ -182,6 +196,46 @@ pub(all) struct Rgba8 {
   green : Byte
   blue : Byte
   alpha : Byte
+} derive(Eq, @debug.Debug)
+
+pub(all) struct TextEntry {
+  format : TextFormat
+  keyword : String
+  text : String
+  language_tag : String
+  translated_keyword : String
+} derive(Eq, @debug.Debug)
+
+pub(all) enum TextError {
+  TextInvalidContainer(PngError)
+  TextInvalidLimits
+  TextTooManyEntries(Int)
+  TextEncodedDataTooLarge(Int)
+  TextDecodedDataTooLarge(Int)
+  TextMalformedChunk(String, Int)
+  TextInvalidKeyword(Int)
+  TextInvalidLatin1(String)
+  TextInvalidUtf8(String)
+  TextInvalidLanguageTag(Int)
+  TextUnexpectedInternationalFields(Int)
+  TextInvalidCompressionFlag(Byte, Int)
+  TextUnsupportedCompression(String, Byte, Int)
+  TextDecompressionFailed(String, Int, DecodeError)
+  TextOutputTooLarge
+} derive(Eq, @debug.Debug)
+pub fn TextError::message(Self) -> String
+
+pub(all) enum TextFormat {
+  TextLatin1
+  TextLatin1Compressed
+  TextInternational
+  TextInternationalCompressed
+} derive(Eq, @debug.Debug)
+
+pub(all) struct TextLimits {
+  max_entries : Int
+  max_encoded_bytes : Int
+  max_decoded_bytes : Int
 } derive(Eq, @debug.Debug)
 
 // Type aliases
