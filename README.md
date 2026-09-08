@@ -28,6 +28,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - deterministically encodes 8-bit grayscale, grayscale-alpha, RGB, and RGBA
   pixels using their native PNG color types;
 - offers fixed and adaptive selection across all five PNG row filters;
+- compresses standalone zlib streams with bounded LZ77 matching and fixed
+  Huffman codes;
 - splits zlib output across caller-sized consecutive IDAT chunks;
 - encodes row-provided images into bounded output fragments without retaining
   the complete source image or compressed stream;
@@ -187,7 +189,22 @@ let result = @moonpng.decode_with_limits(png_bytes, limits)
 ```
 
 The zlib layer is also reusable on its own through `inflate_zlib` and
-`inflate_zlib_with_limit`.
+`inflate_zlib_with_limit`. `compress_zlib_fixed` provides the matching
+deterministic compression path:
+
+```moonbit
+let compressed = @moonpng.compress_zlib_fixed(b"repeated repeated repeated")
+match @moonpng.inflate_zlib(compressed) {
+  Ok(original) => println("restored \{original.length()} bytes")
+  Err(error) => println(error.message())
+}
+```
+
+The compressor searches a 32 KiB history window through bounded hash chains,
+emits matches from 3 through 258 bytes, and writes one fixed-Huffman DEFLATE
+block. It is currently a standalone API; PNG image and text encoders continue
+to use their existing stored-block path while compression strategy integration
+is developed.
 
 ## Architecture
 
@@ -204,7 +221,9 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 ## Roadmap
 
 1. Add broader conformance fixtures and property-based malformed-input tests.
-2. Add fuzzing, benchmarks, and an optimized DEFLATE encoder.
+2. Integrate fixed-Huffman compression into buffered PNG encoding with an
+   explicit strategy option.
+3. Add fuzzing, compression benchmarks, and dynamic-Huffman encoding.
 
 ## Project status
 

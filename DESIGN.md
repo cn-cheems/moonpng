@@ -69,6 +69,22 @@ materialized. The output callback receives the PNG signature and complete PNG
 chunks in order. If a later row has the wrong length, the function returns an
 error but does not retract fragments already delivered to the callback.
 
+## Compression core
+
+`compress_zlib_fixed` writes a complete RFC 1950 stream containing one final
+fixed-Huffman DEFLATE block. Its LZ77 matcher keeps the most recent position for
+each three-byte hash and follows at most 128 prior positions. Candidates older
+than the 32 KiB DEFLATE window are discarded. Greedy matches are capped at 258
+bytes, and equal-length matches retain the nearest distance for deterministic
+output. Literal/length and distance codes are converted from canonical Huffman
+order before being written to the least-significant-bit-first DEFLATE stream.
+
+The initial compressor accepts a complete byte buffer and keeps one previous
+hash-chain link per input byte. It is exposed independently so its format and
+matching behavior can be tested before buffered PNG encoding adopts selectable
+compression strategies. Row-oriented PNG encoding remains on stored blocks to
+preserve its memory bound.
+
 ## Text metadata
 
 Text extraction starts with strict container inspection, then parses `tEXt`,
@@ -90,6 +106,8 @@ bytes.
 - Compressed and decompressed sizes have independent limits.
 - A DEFLATE distance cannot refer before the beginning of output.
 - A DEFLATE match cannot grow output beyond its configured limit.
+- The compressor never emits a match longer than 258 bytes or farther back than
+  32 KiB.
 - The inflated byte count must exactly match the expected scanline layout.
 - Every Adam7 pass is bounded before slicing or allocating its scanlines.
 - Palette indices are checked before color or alpha entries are accessed.

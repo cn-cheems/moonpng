@@ -8,6 +8,8 @@
 - Added configurable resource limits, tests, and an embedded CLI demo.
 - Added a pure MoonBit zlib/DEFLATE inflater supporting stored, fixed-Huffman,
   and dynamic-Huffman blocks.
+- Added deterministic fixed-Huffman zlib compression with a bounded 32 KiB
+  hash-chain LZ77 matcher and standalone round-trip coverage.
 - Added Adler-32 validation, bounded back-references, and trailing-data checks.
 - Added all five PNG scanline filters and RGBA8 pixel output.
 - Added non-interlaced 8-bit grayscale, truecolor, grayscale-alpha, and RGBA

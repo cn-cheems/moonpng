@@ -319,6 +319,77 @@ test "Adler-32 reference vector" {
 }
 
 ///|
+test "fixed-Huffman compressor emits deterministic short streams" {
+  @test.assert_eq(
+    @moonpng.compress_zlib_fixed(b""),
+    b"\x78\x01\x03\x00\x00\x00\x00\x01",
+  )
+  @test.assert_eq(
+    @moonpng.compress_zlib_fixed(b"A"),
+    b"\x78\x01\x73\x04\x00\x00\x42\x00\x42",
+  )
+}
+
+///|
+test "fixed-Huffman compressor round trips every literal byte" {
+  let source : Array[Byte] = []
+  for value = 0; value < 256; value = value + 1 {
+    source.push(value.to_byte())
+  }
+  let input = Bytes::from_array(source)
+  let compressed = @moonpng.compress_zlib_fixed(input)
+  @test.assert_eq(compressed[2].to_int() & 7, 3)
+  match @moonpng.inflate_zlib(compressed) {
+    Ok(output) => @test.assert_eq(output, input)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "fixed-Huffman compressor uses long LZ77 matches" {
+  let source : Array[Byte] = []
+  for index = 0; index < 4096; index = index + 1 {
+    source.push(
+      if index % 3 == 0 {
+        b'a'
+      } else if index % 3 == 1 {
+        b'b'
+      } else {
+        b'c'
+      },
+    )
+  }
+  let input = Bytes::from_array(source)
+  let compressed = @moonpng.compress_zlib_fixed(input)
+  @test.assert_eq(compressed, @moonpng.compress_zlib_fixed(input))
+  @test.assert_eq(compressed.length() < input.length() / 4, true)
+  match @moonpng.inflate_zlib(compressed) {
+    Ok(output) => @test.assert_eq(output, input)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "fixed-Huffman compressor accepts a 32 KiB match distance" {
+  let source : Array[Byte] = [b'a', b'b', b'c']
+  for index = 3; index < 32768; index = index + 1 {
+    source.push(b'\x00')
+  }
+  source.push(b'a')
+  source.push(b'b')
+  source.push(b'c')
+  for index = 3; index < 258; index = index + 1 {
+    source.push(b'\x00')
+  }
+  let input = Bytes::from_array(source)
+  let compressed = @moonpng.compress_zlib_fixed(input)
+  match @moonpng.inflate_zlib(compressed) {
+    Ok(output) => @test.assert_eq(output, input)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
 test "inflate stored DEFLATE block" {
   let stream = b"\x78\x01\x01\x0c\x00\xf3\xffstored block\x1f\x80\x04\xbd"
   match @moonpng.inflate_zlib(stream) {
