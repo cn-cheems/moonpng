@@ -43,7 +43,8 @@ fn encode_copy_range(data : Bytes, offset : Int, length : Int) -> Bytes {
 }
 
 ///|
-fn encode_stored_zlib(raw : Bytes) -> Bytes {
+/// Compress bytes as a deterministic zlib stream using stored DEFLATE blocks.
+pub fn compress_zlib_stored(raw : Bytes) -> Bytes {
   let output : Array[Byte] = [b'\x78', b'\x01']
   let mut offset = 0
   if raw.length() == 0 {
@@ -416,19 +417,7 @@ pub fn encode_with_idat_chunk_size(
   }
 
   let raw_bytes = Bytes::from_array(raw)
-  let compressed = match options.compression_strategy {
-    CompressionStored => encode_stored_zlib(raw_bytes)
-    CompressionFixed => compress_zlib_fixed(raw_bytes)
-    CompressionAuto => {
-      let stored = encode_stored_zlib(raw_bytes)
-      let fixed = compress_zlib_fixed(raw_bytes)
-      if fixed.length() < stored.length() {
-        fixed
-      } else {
-        stored
-      }
-    }
-  }
+  let compressed = compress_zlib(raw_bytes, options.compression_strategy)
   let idat_count = (compressed.length() - 1) / idat_chunk_size + 1
   if compressed.length() > 0x7fffffff - 45 ||
     idat_count > (0x7fffffff - 45 - compressed.length()) / 12 {

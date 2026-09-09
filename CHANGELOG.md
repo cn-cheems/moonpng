@@ -14,6 +14,8 @@
   unprofitable LZ77 references and improve match selection.
 - Added stored, fixed-Huffman, and shortest-output automatic compression
   strategies for buffered PNG encoding.
+- Exposed stored, fixed-Huffman, and shortest-output automatic compression
+  through the reusable standalone zlib API.
 - Added Adler-32 validation, bounded back-references, and trailing-data checks.
 - Added all five PNG scanline filters and RGBA8 pixel output.
 - Added non-interlaced 8-bit grayscale, truecolor, grayscale-alpha, and RGBA

@@ -337,3 +337,24 @@ pub fn compress_zlib_fixed(data : Bytes) -> Bytes {
   encode_append_uint32_be(output, adler32(data))
   Bytes::from_array(output)
 }
+
+///|
+/// Compresses bytes with a selected deterministic zlib strategy.
+///
+/// Automatic mode compares complete stored and fixed-Huffman streams and
+/// returns the shorter result. Stored blocks win an equal-length tie.
+pub fn compress_zlib(data : Bytes, strategy : CompressionStrategy) -> Bytes {
+  match strategy {
+    CompressionStored => compress_zlib_stored(data)
+    CompressionFixed => compress_zlib_fixed(data)
+    CompressionAuto => {
+      let stored = compress_zlib_stored(data)
+      let fixed = compress_zlib_fixed(data)
+      if fixed.length() < stored.length() {
+        fixed
+      } else {
+        stored
+      }
+    }
+  }
+}

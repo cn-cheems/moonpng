@@ -10,7 +10,11 @@ pub fn add_text_entries(Bytes, Array[TextEntry]) -> Result[Bytes, TextError]
 
 pub fn adler32(Bytes) -> UInt
 
+pub fn compress_zlib(Bytes, CompressionStrategy) -> Bytes
+
 pub fn compress_zlib_fixed(Bytes) -> Bytes
+
+pub fn compress_zlib_stored(Bytes) -> Bytes
 
 pub fn crc32(Bytes) -> UInt
 

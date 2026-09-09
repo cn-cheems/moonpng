@@ -550,6 +550,45 @@ test "fixed-Huffman compressor accepts a 32 KiB match distance" {
 }
 
 ///|
+test "standalone zlib strategies select the shortest valid stream" {
+  let repeated = Bytes::from_array(Array::make(1024, b'a'))
+  let repeated_stored = @moonpng.compress_zlib_stored(repeated)
+  let repeated_fixed = @moonpng.compress_zlib_fixed(repeated)
+  let repeated_auto = @moonpng.compress_zlib(repeated, @moonpng.CompressionAuto)
+  @test.assert_eq(repeated_fixed.length() < repeated_stored.length(), true)
+  @test.assert_eq(repeated_auto, repeated_fixed)
+  match @moonpng.inflate_zlib(repeated_auto) {
+    Ok(output) => @test.assert_eq(output, repeated)
+    Err(error) => fail(error.message())
+  }
+
+  let noisy_source : Array[Byte] = []
+  let mut state = 1729
+  for index = 0; index < 1024; index = index + 1 {
+    state = (state * 251 + 137) % 65521
+    noisy_source.push((state % 256).to_byte())
+  }
+  let noise = Bytes::from_array(noisy_source)
+  let noise_stored = @moonpng.compress_zlib_stored(noise)
+  let noise_fixed = @moonpng.compress_zlib_fixed(noise)
+  let noise_auto = @moonpng.compress_zlib(noise, @moonpng.CompressionAuto)
+  @test.assert_eq(noise_stored.length() < noise_fixed.length(), true)
+  @test.assert_eq(noise_auto, noise_stored)
+  @test.assert_eq(
+    @moonpng.compress_zlib(noise, @moonpng.CompressionStored),
+    noise_stored,
+  )
+  @test.assert_eq(
+    @moonpng.compress_zlib(noise, @moonpng.CompressionFixed),
+    noise_fixed,
+  )
+  match @moonpng.inflate_zlib(noise_auto) {
+    Ok(output) => @test.assert_eq(output, noise)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
 test "inflate stored DEFLATE block" {
   let stream = b"\x78\x01\x01\x0c\x00\xf3\xffstored block\x1f\x80\x04\xbd"
   match @moonpng.inflate_zlib(stream) {

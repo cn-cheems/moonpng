@@ -229,11 +229,15 @@ let result = @moonpng.decode_with_limits(png_bytes, limits)
 ```
 
 The zlib layer is also reusable on its own through `inflate_zlib` and
-`inflate_zlib_with_limit`. `compress_zlib_fixed` provides the matching
-deterministic compression path:
+`inflate_zlib_with_limit`. `compress_zlib_stored` and `compress_zlib_fixed`
+provide explicit deterministic compression paths, while `compress_zlib`
+accepts the same Stored, Fixed, or Auto strategy used by the PNG encoder:
 
 ```moonbit
-let compressed = @moonpng.compress_zlib_fixed(b"repeated repeated repeated")
+let compressed = @moonpng.compress_zlib(
+  b"repeated repeated repeated",
+  @moonpng.CompressionAuto,
+)
 match @moonpng.inflate_zlib(compressed) {
   Ok(original) => println("restored \{original.length()} bytes")
   Err(error) => println(error.message())

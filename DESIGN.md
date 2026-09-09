@@ -80,9 +80,12 @@ retract fragments already delivered to the callback.
 
 ## Compression core
 
-`compress_zlib_fixed` writes a complete RFC 1950 stream containing one final
-fixed-Huffman DEFLATE block. Its LZ77 matcher keeps the most recent position for
-each three-byte hash and follows at most 128 prior positions. Candidates older
+`compress_zlib_stored` and `compress_zlib_fixed` write complete RFC 1950
+streams with stored or fixed-Huffman DEFLATE blocks. `compress_zlib` dispatches
+either explicit mode or compares both complete streams for automatic selection,
+with stored blocks winning a size tie. The fixed compressor's LZ77 matcher keeps
+the most recent position for each three-byte hash and follows at most 128 prior
+positions. Candidates older
 than the 32 KiB DEFLATE window are discarded. Greedy matches are capped at 258
 bytes. Each candidate is scored against the exact fixed-Huffman bit cost of its
 literal bytes; matches with no positive saving are discarded. Ties prefer a
