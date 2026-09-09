@@ -107,6 +107,15 @@ fn append_bytes_for_test(output : Array[Byte], data : Bytes) -> Unit {
 }
 
 ///|
+fn join_fragments_for_test(fragments : Array[Bytes]) -> Bytes {
+  let output : Array[Byte] = []
+  for fragment in fragments {
+    append_bytes_for_test(output, fragment)
+  }
+  Bytes::from_array(output)
+}
+
+///|
 fn copy_range_for_test(data : Bytes, start : Int, length : Int) -> Bytes {
   let output : Array[Byte] = []
   output.reserve_capacity(length)
@@ -1015,28 +1024,87 @@ test "select stored, fixed-Huffman, and automatic PNG compression" {
 }
 
 ///|
-test "reject non-stored compression for row-oriented encoding" {
-  let strategies = [@moonpng.CompressionFixed, @moonpng.CompressionAuto]
-  for strategy in strategies {
-    let fragments : Array[Bytes] = []
-    let options : @moonpng.EncodeOptions = {
-      filter_strategy: @moonpng.FilterNone,
-      compression_strategy: strategy,
+test "stream fixed-Huffman rows into bounded IDAT chunks" {
+  let rows : Array[Bytes] = []
+  for row = 0; row < 4; row = row + 1 {
+    rows.push(Bytes::from_array(Array::make(256, b'\x00')))
+  }
+  let fragments : Array[Bytes] = []
+  let options : @moonpng.EncodeOptions = {
+    filter_strategy: @moonpng.FilterNone,
+    compression_strategy: @moonpng.CompressionFixed,
+  }
+  match
+    @moonpng.encode_rows_with_options(
+      256U,
+      4U,
+      @moonpng.PixelGray8,
+      options,
+      11,
+      row => rows[row],
+      fragment => fragments.push(fragment),
+    ) {
+    Ok(_) => {
+      let png = join_fragments_for_test(fragments)
+      match @moonpng.inspect(png) {
+        Ok(info) => {
+          let mut idat_count = 0
+          for chunk in info.chunks {
+            if chunk.kind == "IDAT" {
+              idat_count = idat_count + 1
+              @test.assert_eq(chunk.length <= 11, true)
+            }
+          }
+          @test.assert_eq(idat_count > 1, true)
+          let first_idat = info.chunks[1]
+          @test.assert_eq(png[first_idat.data_offset + 2].to_int() & 7, 2)
+        }
+        Err(error) => fail(error.message())
+      }
+      match @moonpng.decode(png) {
+        Ok(image) => {
+          @test.assert_eq(image.width, 256U)
+          @test.assert_eq(image.height, 4U)
+          @test.assert_eq(image.pixels.length(), 4096)
+          @test.assert_eq(image.pixels[0], b'\x00')
+          @test.assert_eq(image.pixels[4095], b'\xff')
+        }
+        Err(error) => fail(error.message())
+      }
     }
-    match
-      @moonpng.encode_rows_with_options(
-        1U,
-        1U,
-        @moonpng.PixelGray8,
-        options,
-        64,
-        _ => b"\x00",
-        fragment => fragments.push(fragment),
-      ) {
-      Err(@moonpng.EncodeUnsupportedRowCompression) =>
-        @test.assert_eq(fragments.length(), 0)
-      _ => fail("expected EncodeUnsupportedRowCompression")
-    }
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
+test "reject automatic compression for row-oriented encoding" {
+  let fragments : Array[Bytes] = []
+  let options : @moonpng.EncodeOptions = {
+    filter_strategy: @moonpng.FilterNone,
+    compression_strategy: @moonpng.CompressionAuto,
+  }
+  match
+    @moonpng.encode_rows_with_options(
+      1U,
+      1U,
+      @moonpng.PixelGray8,
+      options,
+      64,
+      _ => b"\x00",
+      fragment => fragments.push(fragment),
+    ) {
+    Err(@moonpng.EncodeUnsupportedRowCompression) =>
+      @test.assert_eq(fragments.length(), 0)
+    _ => fail("expected EncodeUnsupportedRowCompression")
+  }
+}
+
+///|
+test "reject a row width that leaves no filter byte" {
+  match
+    @moonpng.encode_rows(0x7fffffffU, 1U, @moonpng.PixelGray8, _ => b"", _ => ()) {
+    Err(@moonpng.EncodeImageTooLarge(0x7fffffffU, 1U)) => ()
+    _ => fail("expected EncodeImageTooLarge")
   }
 }
 

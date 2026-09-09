@@ -36,6 +36,8 @@
   per-chunk CRC validation, and decoder round-trip coverage.
 - Added row-oriented encoding with bounded IDAT fragments, incremental Adler-32,
   cross-block scanline handling, and explicit row-length validation.
+- Added row-oriented fixed-Huffman compression with per-scanline LZ77 state,
+  continuous bit packing, and bounded IDAT emission.
 - Added a MoonBit-driven browser workbench with local file loading, decoded
   canvas preview, chunk inspection, re-encoding, and pixel round-trip checks.
 - Added bounded `tEXt`, `zTXt`, and `iTXt` extraction with Latin-1, UTF-8,

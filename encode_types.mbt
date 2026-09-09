@@ -21,7 +21,7 @@ pub(all) enum FilterStrategy {
 } derive(Debug, Eq)
 
 ///|
-/// DEFLATE strategy used by the buffered PNG encoder.
+/// DEFLATE strategy used by the PNG encoder.
 pub(all) enum CompressionStrategy {
   CompressionStored
   CompressionFixed
@@ -65,6 +65,6 @@ pub fn EncodeError::message(self : EncodeError) -> String {
     EncodeInvalidIdatChunkSize(size) =>
       "IDAT chunk size must be positive, got \{size}"
     EncodeUnsupportedRowCompression =>
-      "row-oriented encoding currently supports stored compression only"
+      "row-oriented encoding does not support automatic compression"
   }
 }

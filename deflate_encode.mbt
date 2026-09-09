@@ -1,6 +1,6 @@
 ///|
 priv struct DeflateBitWriter {
-  output : Array[Byte]
+  emit_byte : (Byte) -> Unit
   mut current : Int
   mut used : Int
 }
@@ -15,7 +15,7 @@ fn DeflateBitWriter::write_bits(
     self.current = self.current | (((value >> shift) & 1) << self.used)
     self.used = self.used + 1
     if self.used == 8 {
-      self.output.push(self.current.to_byte())
+      (self.emit_byte)(self.current.to_byte())
       self.current = 0
       self.used = 0
     }
@@ -25,7 +25,7 @@ fn DeflateBitWriter::write_bits(
 ///|
 fn DeflateBitWriter::finish(self : DeflateBitWriter) -> Unit {
   if self.used != 0 {
-    self.output.push(self.current.to_byte())
+    (self.emit_byte)(self.current.to_byte())
     self.current = 0
     self.used = 0
   }
@@ -191,10 +191,12 @@ fn deflate_find_match(
 }
 
 ///|
-fn deflate_fixed_payload(data : Bytes) -> Bytes {
-  let output : Array[Byte] = []
-  let writer : DeflateBitWriter = { output, current: 0, used: 0, }
-  writer.write_bits(1, 1)
+fn deflate_write_fixed_block(
+  writer : DeflateBitWriter,
+  data : Bytes,
+  is_final : Bool,
+) -> Unit {
+  writer.write_bits(if is_final { 1 } else { 0 }, 1)
   writer.write_bits(1, 2)
   let head = Array::make(32768, -1)
   let previous = Array::make(data.length(), -1)
@@ -229,6 +231,17 @@ fn deflate_fixed_payload(data : Bytes) -> Bytes {
     }
   }
   deflate_write_fixed_symbol(writer, 256)
+}
+
+///|
+fn deflate_fixed_payload(data : Bytes) -> Bytes {
+  let output : Array[Byte] = []
+  let writer : DeflateBitWriter = {
+    emit_byte: byte => output.push(byte),
+    current: 0,
+    used: 0,
+  }
+  deflate_write_fixed_block(writer, data, true)
   writer.finish()
   Bytes::from_array(output)
 }

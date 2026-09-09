@@ -33,8 +33,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - selects stored, fixed-Huffman, or shortest-output automatic compression for
   buffered PNG encoding;
 - splits zlib output across caller-sized consecutive IDAT chunks;
-- encodes row-provided images into bounded output fragments without retaining
-  the complete source image or compressed stream;
+- streams stored or fixed-Huffman row-provided images into bounded output
+  fragments without retaining the complete source image or compressed stream;
 - includes a local browser workbench for upload, inspection, decoded preview,
   lossless text metadata editing, deterministic pixel re-encoding, and
   pixel-level round-trip verification;
@@ -176,8 +176,11 @@ let result = @moonpng.encode_rows(
 a maximum IDAT payload size. Its working memory is bounded by the row width and
 IDAT limit, not image height. Because output is progressive, a bad row can be
 reported after the signature or earlier chunks have already reached the
-callback. The row-oriented path currently requires `CompressionStored`; other
-compression strategies are rejected before any fragment is emitted.
+callback. The row-oriented path supports `CompressionStored` and
+`CompressionFixed`. Fixed mode emits one DEFLATE block per filtered scanline
+and resets its matcher after each row, keeping memory independent of image
+height. `CompressionAuto` is rejected before any fragment is emitted because
+comparing complete candidate streams would violate that bound.
 
 ## Inspect without decoding
 
@@ -224,8 +227,9 @@ block. A candidate is emitted only when its length and distance codes cost
 fewer bits than the equivalent literals. The encoder also looks one byte ahead
 and defers a match when the next position produces a larger saving. Buffered
 PNG encoding uses the same implementation for `CompressionFixed` and
-`CompressionAuto`. Text metadata compression and the bounded row-oriented
-encoder continue to use stored blocks.
+`CompressionAuto`. Row-oriented Fixed encoding reuses the matcher separately
+for each scanline and writes consecutive blocks through the same bit stream.
+Text metadata compression continues to use stored blocks.
 
 ## Architecture
 
@@ -242,8 +246,8 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 ## Roadmap
 
 1. Add broader conformance fixtures and property-based malformed-input tests.
-2. Add streaming fixed-Huffman compression while preserving row-oriented
-   memory bounds.
+2. Add per-scanline automatic compression selection to the row-oriented
+   encoder.
 3. Add fuzzing, compression benchmarks, and dynamic-Huffman encoding.
 
 ## Project status
