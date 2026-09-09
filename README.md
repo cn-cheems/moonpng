@@ -249,10 +249,12 @@ The compressor searches a 32 KiB history window through bounded hash chains,
 emits matches from 3 through 258 bytes, and writes one fixed-Huffman DEFLATE
 block. A candidate is emitted only when its length and distance codes cost
 fewer bits than the equivalent literals. The encoder also looks one byte ahead
-and defers a match when the next position produces a larger saving. Buffered
-PNG encoding uses the same implementation for `CompressionFixed` and
-`CompressionAuto`. Row-oriented Fixed encoding reuses the matcher separately
-for each scanline and writes consecutive blocks through the same bit stream.
+and defers a match when the next position produces a larger saving. Match
+decisions are retained as reusable literal and length/distance tokens before
+Huffman coding. Buffered PNG encoding uses the same implementation for
+`CompressionFixed` and `CompressionAuto`. Row-oriented Fixed encoding reuses
+the matcher separately for each scanline and writes consecutive blocks through
+the same bit stream.
 Row-oriented Auto performs the same comparison per scanline so candidate memory
 is released before the next row. Compressed `zTXt` and `iTXt` entries also use
 automatic selection, avoiding fixed-Huffman expansion on incompressible text.

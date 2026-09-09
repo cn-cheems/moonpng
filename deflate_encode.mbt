@@ -6,6 +6,16 @@ priv struct DeflateBitWriter {
 }
 
 ///|
+/// One LZ77 decision before Huffman coding.
+///
+/// Keeping literals and matches independent from the bit writer allows the
+/// same match stream to feed fixed or dynamic Huffman encoders.
+priv enum Lz77Token {
+  Lz77Literal(Byte)
+  Lz77Match(Int, Int)
+}
+
+///|
 fn DeflateBitWriter::write_bits(
   self : DeflateBitWriter,
   value : Int,
@@ -199,13 +209,12 @@ fn deflate_find_match(
 }
 
 ///|
-fn deflate_write_fixed_block(
-  writer : DeflateBitWriter,
-  data : Bytes,
-  is_final : Bool,
-) -> Unit {
-  writer.write_bits(if is_final { 1 } else { 0 }, 1)
-  writer.write_bits(1, 2)
+/// Parse bytes with the established fixed-Huffman profitability model.
+///
+/// Token consumers can reuse these decisions without repeating hash-chain
+/// search. Keeping the cost model unchanged preserves existing output bytes.
+fn deflate_tokenize_lz77(data : Bytes) -> Array[Lz77Token] {
+  let tokens : Array[Lz77Token] = []
   let head = Array::make(32768, -1)
   let previous = Array::make(data.length(), -1)
   let mut offset = 0
@@ -222,22 +231,49 @@ fn deflate_write_fixed_block(
         previous,
       )
       if next_savings > savings {
-        deflate_write_fixed_symbol(writer, data.unsafe_get(offset).to_int())
+        tokens.push(Lz77Literal(data.unsafe_get(offset)))
         offset = offset + 1
       } else {
-        deflate_write_length(writer, length)
-        deflate_write_distance(writer, distance)
+        tokens.push(Lz77Match(length, distance))
         for index = 1; index < length; index = index + 1 {
           deflate_insert(data, offset + index, head, previous)
         }
         offset = offset + length
       }
     } else {
-      deflate_write_fixed_symbol(writer, data.unsafe_get(offset).to_int())
+      tokens.push(Lz77Literal(data.unsafe_get(offset)))
       deflate_insert(data, offset, head, previous)
       offset = offset + 1
     }
   }
+  tokens
+}
+
+///|
+fn deflate_write_fixed_tokens(
+  writer : DeflateBitWriter,
+  tokens : Array[Lz77Token],
+) -> Unit {
+  for token in tokens {
+    match token {
+      Lz77Literal(byte) => deflate_write_fixed_symbol(writer, byte.to_int())
+      Lz77Match(length, distance) => {
+        deflate_write_length(writer, length)
+        deflate_write_distance(writer, distance)
+      }
+    }
+  }
+}
+
+///|
+fn deflate_write_fixed_block(
+  writer : DeflateBitWriter,
+  data : Bytes,
+  is_final : Bool,
+) -> Unit {
+  writer.write_bits(if is_final { 1 } else { 0 }, 1)
+  writer.write_bits(1, 2)
+  deflate_write_fixed_tokens(writer, deflate_tokenize_lz77(data))
   deflate_write_fixed_symbol(writer, 256)
 }
 

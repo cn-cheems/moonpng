@@ -12,6 +12,8 @@
   hash-chain LZ77 matcher and standalone round-trip coverage.
 - Added fixed-code bit-cost scoring and one-step lazy matching to avoid
   unprofitable LZ77 references and improve match selection.
+- Separated LZ77 parsing into a reusable literal/match token stream while
+  preserving fixed-Huffman output byte-for-byte.
 - Added stored, fixed-Huffman, and shortest-output automatic compression
   strategies for buffered PNG encoding.
 - Exposed stored, fixed-Huffman, and shortest-output automatic compression

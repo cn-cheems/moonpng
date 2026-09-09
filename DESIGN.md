@@ -91,9 +91,11 @@ bytes. Each candidate is scored against the exact fixed-Huffman bit cost of its
 literal bytes; matches with no positive saving are discarded. Ties prefer a
 longer match and then the nearest distance. Before emitting a profitable match,
 the encoder inserts the current position and checks the next byte. It emits the
-current byte as a literal when that next match has a larger saving. Literal,
-length, and distance codes are converted from canonical Huffman order before
-being written to the least-significant-bit-first DEFLATE stream.
+current byte as a literal when that next match has a larger saving. These
+decisions are materialized as a reusable stream of literal and length/distance
+tokens before entropy coding. The fixed writer converts their canonical
+Huffman codes before writing them to the least-significant-bit-first DEFLATE
+stream.
 
 The compressor accepts a complete byte buffer and keeps one previous hash-chain
 link per input byte. It is exposed independently and is also used by buffered

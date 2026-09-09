@@ -95,3 +95,140 @@ test "defer a short match when the next position saves more bits" {
     Err(error) => fail(error.message())
   }
 }
+
+///|
+fn legacy_write_fixed_block_for_test(
+  writer : DeflateBitWriter,
+  data : Bytes,
+  is_final : Bool,
+) -> Unit {
+  writer.write_bits(if is_final { 1 } else { 0 }, 1)
+  writer.write_bits(1, 2)
+  let head = Array::make(32768, -1)
+  let previous = Array::make(data.length(), -1)
+  let mut offset = 0
+  while offset < data.length() {
+    let (length, distance, savings) = deflate_find_match(
+      data, offset, head, previous,
+    )
+    if savings > 0 {
+      deflate_insert(data, offset, head, previous)
+      let (_, _, next_savings) = deflate_find_match(
+        data,
+        offset + 1,
+        head,
+        previous,
+      )
+      if next_savings > savings {
+        deflate_write_fixed_symbol(writer, data.unsafe_get(offset).to_int())
+        offset = offset + 1
+      } else {
+        deflate_write_length(writer, length)
+        deflate_write_distance(writer, distance)
+        for index = 1; index < length; index = index + 1 {
+          deflate_insert(data, offset + index, head, previous)
+        }
+        offset = offset + length
+      }
+    } else {
+      deflate_write_fixed_symbol(writer, data.unsafe_get(offset).to_int())
+      deflate_insert(data, offset, head, previous)
+      offset = offset + 1
+    }
+  }
+  deflate_write_fixed_symbol(writer, 256)
+}
+
+///|
+fn legacy_fixed_payload_for_test(data : Bytes) -> Bytes {
+  let output : Array[Byte] = []
+  let writer : DeflateBitWriter = {
+    emit_byte: byte => output.push(byte),
+    current: 0,
+    used: 0,
+  }
+  legacy_write_fixed_block_for_test(writer, data, true)
+  writer.finish()
+  Bytes::from_array(output)
+}
+
+///|
+fn fixed_blocks_payload_for_test(
+  blocks : Array[Bytes],
+  use_legacy_writer : Bool,
+) -> Bytes {
+  let output : Array[Byte] = []
+  let writer : DeflateBitWriter = {
+    emit_byte: byte => output.push(byte),
+    current: 0,
+    used: 0,
+  }
+  for index = 0; index < blocks.length(); index = index + 1 {
+    let is_final = index + 1 == blocks.length()
+    if use_legacy_writer {
+      legacy_write_fixed_block_for_test(writer, blocks[index], is_final)
+    } else {
+      deflate_write_fixed_block(writer, blocks[index], is_final)
+    }
+  }
+  writer.finish()
+  Bytes::from_array(output)
+}
+
+///|
+test "represent LZ77 decisions as reusable tokens" {
+  let tokens = deflate_tokenize_lz77(b"abcabcabcabc")
+  @test.assert_eq(tokens.length(), 4)
+  match tokens[0] {
+    Lz77Literal(b'a') => ()
+    _ => fail("expected literal a")
+  }
+  match tokens[1] {
+    Lz77Literal(b'b') => ()
+    _ => fail("expected literal b")
+  }
+  match tokens[2] {
+    Lz77Literal(b'c') => ()
+    _ => fail("expected literal c")
+  }
+  match tokens[3] {
+    Lz77Match(9, 3) => ()
+    _ => fail("expected a length 9, distance 3 match")
+  }
+}
+
+///|
+test "tokenized fixed-Huffman output matches the legacy writer byte-for-byte" {
+  let repeated = Bytes::from_array(Array::make(4096, b'a'))
+  let lazy_input = b"abcdefghijklmnopqrstuvwxyz|XabQ|Xabcdefghijklmnopqrstuvwxyz"
+  let noisy_source : Array[Byte] = []
+  let mut state = 1729
+  for index = 0; index < 4096; index = index + 1 {
+    state = (state * 251 + 137) % 65521
+    noisy_source.push((state % 256).to_byte())
+  }
+  let corpus = [
+    b"",
+    b"A",
+    b"all literal bytes",
+    b"abcabcabcabcabcabc",
+    repeated,
+    lazy_input,
+    Bytes::from_array(noisy_source),
+  ]
+  for data in corpus {
+    @test.assert_eq(
+      deflate_fixed_payload(data),
+      legacy_fixed_payload_for_test(data),
+    )
+  }
+  let blocks = [
+    b"first scanline first scanline",
+    b"second scanline second scanline second scanline",
+    Bytes::from_array(noisy_source),
+  ]
+  @test.assert_eq(
+    fixed_blocks_payload_for_test(blocks, false),
+    fixed_blocks_payload_for_test(blocks, true),
+  )
+}
