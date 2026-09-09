@@ -69,12 +69,14 @@ predecessor for filtering. Stored mode writes blocks directly into a
 caller-sized IDAT payload. Fixed mode materializes one filtered scanline,
 builds a row-local hash chain, and writes one fixed-Huffman block before
 discarding the match state. The bit writer continues across row boundaries, so
-only the final row sets BFINAL. Adler-32 is updated as filtered bytes pass
-through; neither mode materializes the full pixel input or zlib stream. The
+only the final row sets BFINAL. Automatic mode encodes a row-local Fixed
+candidate, calculates the exact Stored cost including current bit alignment,
+and commits the shorter representation. Stored wins ties, and consecutive rows
+may therefore use different block types. Adler-32 is updated as filtered bytes
+pass through; no mode materializes the full pixel input or zlib stream. The
 output callback receives the PNG signature and complete PNG chunks in order.
 If a later row has the wrong length, the function returns an error but does not
-retract fragments already delivered to the callback. Automatic comparison is
-rejected before output because it requires complete candidate streams.
+retract fragments already delivered to the callback.
 
 ## Compression core
 
@@ -93,9 +95,9 @@ being written to the least-significant-bit-first DEFLATE stream.
 The compressor accepts a complete byte buffer and keeps one previous hash-chain
 link per input byte. It is exposed independently and is also used by buffered
 PNG encoding. Automatic compression holds both candidate zlib streams briefly
-and selects by complete encoded length. Row-oriented Fixed encoding limits each
-matcher invocation to one scanline, preserving a memory bound based on row
-width rather than image height.
+and selects by complete encoded length. Row-oriented Fixed and Auto encoding
+limit each candidate and matcher invocation to one scanline, preserving a
+memory bound based on row width rather than image height.
 
 ## Text metadata
 

@@ -256,9 +256,6 @@ pub fn encode_rows_with_options(
     return Err(EncodeImageTooLarge(width, height))
   }
   let row_bytes = width_int * channels
-  if options.compression_strategy == CompressionAuto {
-    return Err(EncodeUnsupportedRowCompression)
-  }
 
   emit(b"\x89PNG\r\n\x1a\n")
   emit(encode_chunk_bytes(b"IHDR", encode_ihdr_payload(width, height, format)))
@@ -267,17 +264,12 @@ pub fn encode_rows_with_options(
   let mut adler = 1U
   encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, b'\x78')
   encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, b'\x01')
-  let fixed_writer : DeflateBitWriter? = if options.compression_strategy ==
-    CompressionFixed {
-    Some({
-      emit_byte: byte => {
-        encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, byte)
-      },
-      current: 0,
-      used: 0,
-    })
-  } else {
-    None
+  let writer : DeflateBitWriter = {
+    emit_byte: byte => {
+      encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, byte)
+    },
+    current: 0,
+    used: 0,
   }
   let mut previous_row : Bytes? = None
   for row_index = 0; row_index < height_int; row_index = row_index + 1 {
@@ -291,84 +283,27 @@ pub fn encode_rows_with_options(
       channels,
       options.filter_strategy,
     )
-    match fixed_writer {
-      Some(writer) => {
-        let scanline : Array[Byte] = [filter]
-        scanline.reserve_capacity(row_bytes + 1)
-        adler = encode_update_adler(adler, filter)
-        for byte in filtered {
-          scanline.push(byte)
-          adler = encode_update_adler(adler, byte)
-        }
-        deflate_write_fixed_block(
-          writer,
-          Bytes::from_array(scanline),
-          row_index + 1 == height_int,
-        )
-      }
-      None => {
-        let scanline_length = row_bytes + 1
-        let mut scanline_offset = 0
-        while scanline_offset < scanline_length {
-          let remaining = scanline_length - scanline_offset
-          let block_length = if remaining > 65535 { 65535 } else { remaining }
-          let is_final = row_index + 1 == height_int &&
-            scanline_offset + block_length == scanline_length
-          encode_emit_idat_byte(
-            idat_payload,
-            idat_chunk_size,
-            emit,
-            if is_final {
-              b'\x01'
-            } else {
-              b'\x00'
-            },
-          )
-          encode_emit_idat_byte(
-            idat_payload,
-            idat_chunk_size,
-            emit,
-            block_length.to_byte(),
-          )
-          encode_emit_idat_byte(
-            idat_payload,
-            idat_chunk_size,
-            emit,
-            (block_length >> 8).to_byte(),
-          )
-          let inverse = block_length ^ 0xffff
-          encode_emit_idat_byte(
-            idat_payload,
-            idat_chunk_size,
-            emit,
-            inverse.to_byte(),
-          )
-          encode_emit_idat_byte(
-            idat_payload,
-            idat_chunk_size,
-            emit,
-            (inverse >> 8).to_byte(),
-          )
-          for index = 0; index < block_length; index = index + 1 {
-            let position = scanline_offset + index
-            let byte = if position == 0 {
-              filter
-            } else {
-              filtered[position - 1]
-            }
-            encode_emit_idat_byte(idat_payload, idat_chunk_size, emit, byte)
-            adler = encode_update_adler(adler, byte)
-          }
-          scanline_offset = scanline_offset + block_length
-        }
+    let scanline : Array[Byte] = [filter]
+    scanline.reserve_capacity(row_bytes + 1)
+    adler = encode_update_adler(adler, filter)
+    for byte in filtered {
+      scanline.push(byte)
+      adler = encode_update_adler(adler, byte)
+    }
+    let scanline_bytes = Bytes::from_array(scanline)
+    let is_final = row_index + 1 == height_int
+    match options.compression_strategy {
+      CompressionStored =>
+        deflate_write_stored_blocks(writer, scanline_bytes, is_final)
+      CompressionFixed =>
+        deflate_write_fixed_block(writer, scanline_bytes, is_final)
+      CompressionAuto => {
+        let _ = deflate_write_auto_block(writer, scanline_bytes, is_final)
       }
     }
     previous_row = Some(row)
   }
-  match fixed_writer {
-    Some(writer) => writer.finish()
-    None => ()
-  }
+  writer.finish()
   encode_emit_idat_byte(
     idat_payload,
     idat_chunk_size,

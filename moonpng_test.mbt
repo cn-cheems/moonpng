@@ -1077,7 +1077,17 @@ test "stream fixed-Huffman rows into bounded IDAT chunks" {
 }
 
 ///|
-test "reject automatic compression for row-oriented encoding" {
+test "stream automatic compression with mixed DEFLATE blocks" {
+  let literal_row : Array[Byte] = []
+  for value = 144; value < 256; value = value + 1 {
+    literal_row.push(value.to_byte())
+  }
+  let literal_bytes = Bytes::from_array(literal_row)
+  let rows : Array[Bytes] = [
+    literal_bytes,
+    Bytes::from_array(Array::make(112, b'\x00')),
+    literal_bytes,
+  ]
   let fragments : Array[Bytes] = []
   let options : @moonpng.EncodeOptions = {
     filter_strategy: @moonpng.FilterNone,
@@ -1085,17 +1095,51 @@ test "reject automatic compression for row-oriented encoding" {
   }
   match
     @moonpng.encode_rows_with_options(
-      1U,
-      1U,
+      112U,
+      3U,
       @moonpng.PixelGray8,
       options,
-      64,
-      _ => b"\x00",
+      4096,
+      row => rows[row],
       fragment => fragments.push(fragment),
     ) {
-    Err(@moonpng.EncodeUnsupportedRowCompression) =>
-      @test.assert_eq(fragments.length(), 0)
-    _ => fail("expected EncodeUnsupportedRowCompression")
+    Ok(_) => {
+      let png = join_fragments_for_test(fragments)
+      match @moonpng.inspect(png) {
+        Ok(info) => {
+          let idat = info.chunks[1]
+          @test.assert_eq(png[idat.data_offset + 2].to_int() & 7, 0)
+          @test.assert_eq(png[idat.data_offset + 120].to_int() & 7, 2)
+        }
+        Err(error) => fail(error.message())
+      }
+      let expected : Array[Byte] = []
+      for value = 144; value < 256; value = value + 1 {
+        let byte = value.to_byte()
+        expected.push(byte)
+        expected.push(byte)
+        expected.push(byte)
+        expected.push(b'\xff')
+      }
+      for pixel = 0; pixel < 112; pixel = pixel + 1 {
+        expected.push(b'\x00')
+        expected.push(b'\x00')
+        expected.push(b'\x00')
+        expected.push(b'\xff')
+      }
+      for value = 144; value < 256; value = value + 1 {
+        let byte = value.to_byte()
+        expected.push(byte)
+        expected.push(byte)
+        expected.push(byte)
+        expected.push(b'\xff')
+      }
+      match @moonpng.decode(png) {
+        Ok(image) => @test.assert_eq(image.pixels, Bytes::from_array(expected))
+        Err(error) => fail(error.message())
+      }
+    }
+    Err(error) => fail(error.message())
   }
 }
 

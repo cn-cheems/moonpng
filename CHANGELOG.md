@@ -38,6 +38,8 @@
   cross-block scanline handling, and explicit row-length validation.
 - Added row-oriented fixed-Huffman compression with per-scanline LZ77 state,
   continuous bit packing, and bounded IDAT emission.
+- Added exact per-scanline automatic compression selection with mixed stored
+  and fixed-Huffman blocks under the same row-oriented memory bound.
 - Added a MoonBit-driven browser workbench with local file loading, decoded
   canvas preview, chunk inspection, re-encoding, and pixel round-trip checks.
 - Added bounded `tEXt`, `zTXt`, and `iTXt` extraction with Latin-1, UTF-8,

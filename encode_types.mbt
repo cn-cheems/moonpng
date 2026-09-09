@@ -6,7 +6,6 @@ pub(all) enum EncodeError {
   EncodePixelLengthMismatch(Int, Int)
   EncodeRowLengthMismatch(Int, Int, Int)
   EncodeInvalidIdatChunkSize(Int)
-  EncodeUnsupportedRowCompression
 } derive(Debug, Eq)
 
 ///|
@@ -64,7 +63,5 @@ pub fn EncodeError::message(self : EncodeError) -> String {
       "row \{row} requires \{expected} bytes, got \{actual}"
     EncodeInvalidIdatChunkSize(size) =>
       "IDAT chunk size must be positive, got \{size}"
-    EncodeUnsupportedRowCompression =>
-      "row-oriented encoding does not support automatic compression"
   }
 }

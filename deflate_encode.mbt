@@ -32,6 +32,14 @@ fn DeflateBitWriter::finish(self : DeflateBitWriter) -> Unit {
 }
 
 ///|
+fn DeflateBitWriter::emit_complete_byte(
+  self : DeflateBitWriter,
+  value : Byte,
+) -> Unit {
+  (self.emit_byte)(value)
+}
+
+///|
 fn deflate_write_fixed_symbol(writer : DeflateBitWriter, symbol : Int) -> Unit {
   let (canonical, bit_count) = if symbol <= 143 {
     (0x30 + symbol, 8)
@@ -231,6 +239,81 @@ fn deflate_write_fixed_block(
     }
   }
   deflate_write_fixed_symbol(writer, 256)
+}
+
+///|
+fn deflate_write_stored_blocks(
+  writer : DeflateBitWriter,
+  data : Bytes,
+  is_final : Bool,
+) -> Unit {
+  let mut offset = 0
+  if data.length() == 0 {
+    writer.write_bits(if is_final { 1 } else { 0 }, 1)
+    writer.write_bits(0, 2)
+    writer.finish()
+    writer.emit_complete_byte(b'\x00')
+    writer.emit_complete_byte(b'\x00')
+    writer.emit_complete_byte(b'\xff')
+    writer.emit_complete_byte(b'\xff')
+  }
+  while offset < data.length() {
+    let remaining = data.length() - offset
+    let block_length = if remaining > 65535 { 65535 } else { remaining }
+    let block_is_final = is_final && offset + block_length == data.length()
+    writer.write_bits(if block_is_final { 1 } else { 0 }, 1)
+    writer.write_bits(0, 2)
+    writer.finish()
+    writer.emit_complete_byte(block_length.to_byte())
+    writer.emit_complete_byte((block_length >> 8).to_byte())
+    let inverse = block_length ^ 0xffff
+    writer.emit_complete_byte(inverse.to_byte())
+    writer.emit_complete_byte((inverse >> 8).to_byte())
+    for index = 0; index < block_length; index = index + 1 {
+      writer.emit_complete_byte(data.unsafe_get(offset + index))
+    }
+    offset = offset + block_length
+  }
+}
+
+///|
+fn deflate_stored_blocks_bit_count(initial_used : Int, length : Int) -> Int {
+  let block_count = if length == 0 { 1 } else { (length + 65534) / 65535 }
+  let first_padding = (8 - (initial_used + 3) % 8) % 8
+  3 + first_padding + 32 + length * 8 + (block_count - 1) * 40
+}
+
+///|
+fn deflate_write_auto_block(
+  writer : DeflateBitWriter,
+  data : Bytes,
+  is_final : Bool,
+) -> Bool {
+  if data.length() > (0x7fffffff - 64) / 9 {
+    deflate_write_stored_blocks(writer, data, is_final)
+    return false
+  }
+  let candidate : Array[Byte] = []
+  let probe : DeflateBitWriter = {
+    emit_byte: byte => candidate.push(byte),
+    current: writer.current,
+    used: writer.used,
+  }
+  let initial_used = writer.used
+  deflate_write_fixed_block(probe, data, is_final)
+  let fixed_bits = candidate.length() * 8 + probe.used - initial_used
+  let stored_bits = deflate_stored_blocks_bit_count(initial_used, data.length())
+  if fixed_bits < stored_bits {
+    for byte in candidate {
+      writer.emit_complete_byte(byte)
+    }
+    writer.current = probe.current
+    writer.used = probe.used
+    true
+  } else {
+    deflate_write_stored_blocks(writer, data, is_final)
+    false
+  }
 }
 
 ///|
