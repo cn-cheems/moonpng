@@ -160,6 +160,135 @@ fn append_chunk_for_test(
 }
 
 ///|
+fn ihdr_payload_for_test(
+  width : UInt,
+  height : UInt,
+  bit_depth : Byte,
+  color_type : Byte,
+  compression_method : Byte,
+  filter_method : Byte,
+  interlace_method : Byte,
+) -> Bytes {
+  let payload : Array[Byte] = []
+  append_uint32_be_for_test(payload, width)
+  append_uint32_be_for_test(payload, height)
+  payload.push(bit_depth)
+  payload.push(color_type)
+  payload.push(compression_method)
+  payload.push(filter_method)
+  payload.push(interlace_method)
+  Bytes::from_array(payload)
+}
+
+///|
+fn structural_png_with_ihdr_for_test(ihdr : Bytes) -> Bytes {
+  let output : Array[Byte] = []
+  append_bytes_for_test(output, b"\x89PNG\r\n\x1a\n")
+  append_chunk_for_test(output, b"IHDR", ihdr)
+  append_chunk_for_test(output, b"IDAT", b"")
+  append_chunk_for_test(output, b"IEND", b"")
+  Bytes::from_array(output)
+}
+
+///|
+test "reject every truncated prefix of a valid PNG" {
+  let fixture = valid_structural_png()
+  for length = 0; length < fixture.length(); length = length + 1 {
+    let prefix = copy_range_for_test(fixture, 0, length)
+    match @moonpng.inspect(prefix) {
+      Err(_) => ()
+      Ok(_) => fail("accepted truncated PNG prefix of length \{length}")
+    }
+  }
+}
+
+///|
+test "reject every single-bit mutation of a valid PNG" {
+  let fixture = valid_structural_png()
+  for offset = 0; offset < fixture.length(); offset = offset + 1 {
+    for bit = 0; bit < 8; bit = bit + 1 {
+      let mutated = fixture.to_array()
+      mutated[offset] = mutated[offset] ^ (1 << bit).to_byte()
+      match @moonpng.inspect(Bytes::from_array(mutated)) {
+        Err(_) => ()
+        Ok(_) => fail("accepted one-bit mutation at byte \{offset}, bit \{bit}")
+      }
+    }
+  }
+}
+
+///|
+test "reject zero PNG dimensions after a valid CRC" {
+  let zero_width = structural_png_with_ihdr_for_test(
+    ihdr_payload_for_test(0U, 1U, b'\x08', b'\x06', b'\x00', b'\x00', b'\x00'),
+  )
+  match @moonpng.inspect(zero_width) {
+    Err(@moonpng.InvalidDimensions(0U, 1U)) => ()
+    _ => fail("expected zero width to be rejected")
+  }
+  let zero_height = structural_png_with_ihdr_for_test(
+    ihdr_payload_for_test(1U, 0U, b'\x08', b'\x06', b'\x00', b'\x00', b'\x00'),
+  )
+  match @moonpng.inspect(zero_height) {
+    Err(@moonpng.InvalidDimensions(1U, 0U)) => ()
+    _ => fail("expected zero height to be rejected")
+  }
+}
+
+///|
+test "reject invalid PNG bit-depth and color-type pairs after a valid CRC" {
+  let invalid_pairs : Array[(Byte, Byte)] = [
+    (b'\x01', b'\x02'),
+    (b'\x02', b'\x04'),
+    (b'\x04', b'\x06'),
+    (b'\x10', b'\x03'),
+  ]
+  for pair in invalid_pairs {
+    let (bit_depth, color_type) = pair
+    let png = structural_png_with_ihdr_for_test(
+      ihdr_payload_for_test(
+        1U, 1U, bit_depth, color_type, b'\x00', b'\x00', b'\x00',
+      ),
+    )
+    match @moonpng.inspect(png) {
+      Err(@moonpng.InvalidColorFormat(actual_depth, actual_color)) => {
+        @test.assert_eq(actual_depth, bit_depth)
+        @test.assert_eq(actual_color, color_type)
+      }
+      _ =>
+        fail(
+          "expected invalid depth/color pair \{bit_depth}/\{color_type} to be rejected",
+        )
+    }
+  }
+}
+
+///|
+test "reject unsupported PNG header methods after a valid CRC" {
+  let compression = structural_png_with_ihdr_for_test(
+    ihdr_payload_for_test(1U, 1U, b'\x08', b'\x06', b'\x01', b'\x00', b'\x00'),
+  )
+  match @moonpng.inspect(compression) {
+    Err(@moonpng.InvalidCompressionMethod(b'\x01')) => ()
+    _ => fail("expected unsupported compression method")
+  }
+  let filter = structural_png_with_ihdr_for_test(
+    ihdr_payload_for_test(1U, 1U, b'\x08', b'\x06', b'\x00', b'\x01', b'\x00'),
+  )
+  match @moonpng.inspect(filter) {
+    Err(@moonpng.InvalidFilterMethod(b'\x01')) => ()
+    _ => fail("expected unsupported filter method")
+  }
+  let interlace = structural_png_with_ihdr_for_test(
+    ihdr_payload_for_test(1U, 1U, b'\x08', b'\x06', b'\x00', b'\x00', b'\x02'),
+  )
+  match @moonpng.inspect(interlace) {
+    Err(@moonpng.InvalidInterlaceMethod(b'\x02')) => ()
+    _ => fail("expected unsupported interlace method")
+  }
+}
+
+///|
 fn png_with_ancillary_for_test(kind : Bytes, payload : Bytes) -> Bytes {
   let output : Array[Byte] = []
   append_bytes_for_test(output, b"\x89PNG\r\n\x1a\n")

@@ -266,7 +266,7 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 ## Roadmap
 
-1. Add broader conformance fixtures and property-based malformed-input tests.
+1. Extend deterministic mutation coverage with randomized malformed-input tests.
 2. Tune match-search limits against a documented, redistributable image corpus.
 3. Add fuzzing and dynamic-Huffman encoding.
 
