@@ -46,11 +46,30 @@ fn deflate_write_fixed_symbol(writer : DeflateBitWriter, symbol : Int) -> Unit {
 }
 
 ///|
-fn deflate_write_length(writer : DeflateBitWriter, length : Int) -> Unit {
+fn deflate_fixed_symbol_bit_count(symbol : Int) -> Int {
+  if symbol <= 143 {
+    8
+  } else if symbol <= 255 {
+    9
+  } else if symbol <= 279 {
+    7
+  } else {
+    8
+  }
+}
+
+///|
+fn deflate_length_index(length : Int) -> Int {
   let mut index = 0
   while index + 1 < length_bases.length() && length >= length_bases[index + 1] {
     index = index + 1
   }
+  index
+}
+
+///|
+fn deflate_write_length(writer : DeflateBitWriter, length : Int) -> Unit {
+  let index = deflate_length_index(length)
   deflate_write_fixed_symbol(writer, 257 + index)
   let extra_bits = length_extra_bits[index]
   if extra_bits != 0 {
@@ -59,17 +78,33 @@ fn deflate_write_length(writer : DeflateBitWriter, length : Int) -> Unit {
 }
 
 ///|
-fn deflate_write_distance(writer : DeflateBitWriter, distance : Int) -> Unit {
+fn deflate_distance_symbol(distance : Int) -> Int {
   let mut symbol = 0
   while symbol + 1 < distance_bases.length() &&
         distance >= distance_bases[symbol + 1] {
     symbol = symbol + 1
   }
+  symbol
+}
+
+///|
+fn deflate_write_distance(writer : DeflateBitWriter, distance : Int) -> Unit {
+  let symbol = deflate_distance_symbol(distance)
   writer.write_bits(reverse_low_bits(symbol, 5), 5)
   let extra_bits = distance_extra_bits[symbol]
   if extra_bits != 0 {
     writer.write_bits(distance - distance_bases[symbol], extra_bits)
   }
+}
+
+///|
+fn deflate_match_bit_cost(length : Int, distance : Int) -> Int {
+  let length_index = deflate_length_index(length)
+  let distance_symbol = deflate_distance_symbol(distance)
+  deflate_fixed_symbol_bit_count(257 + length_index) +
+  length_extra_bits[length_index] +
+  5 +
+  distance_extra_bits[distance_symbol]
 }
 
 ///|
@@ -100,13 +135,14 @@ fn deflate_find_match(
   offset : Int,
   head : Array[Int],
   previous : Array[Int],
-) -> (Int, Int) {
+) -> (Int, Int, Int) {
   if offset + 2 >= data.length() {
-    return (0, 0)
+    return (0, 0, 0)
   }
   let mut candidate = head[deflate_hash(data, offset)]
-  let mut best_length = 2
+  let mut best_length = 0
   let mut best_distance = 0
+  let mut best_savings = 0
   let remaining = data.length() - offset
   let maximum_length = if remaining > 258 { 258 } else { remaining }
   let mut attempts = 0
@@ -116,25 +152,41 @@ fn deflate_find_match(
       break
     }
     let mut length = 0
+    let mut literal_bits = 0
     while length < maximum_length &&
           data.unsafe_get(candidate + length) ==
           data.unsafe_get(offset + length) {
+      literal_bits = literal_bits +
+        deflate_fixed_symbol_bit_count(
+          data.unsafe_get(offset + length).to_int(),
+        )
       length = length + 1
     }
-    if length > best_length {
-      best_length = length
-      best_distance = distance
-      if length == 258 {
+    if length >= 3 {
+      let savings = literal_bits - deflate_match_bit_cost(length, distance)
+      if savings > best_savings ||
+        (
+          savings == best_savings &&
+          (
+            length > best_length ||
+            (length == best_length && distance < best_distance)
+          )
+        ) {
+        best_length = length
+        best_distance = distance
+        best_savings = savings
+      }
+      if length == 258 && savings == best_savings {
         break
       }
     }
     candidate = previous[candidate]
     attempts = attempts + 1
   }
-  if best_length >= 3 {
-    (best_length, best_distance)
+  if best_savings > 0 {
+    (best_length, best_distance, best_savings)
   } else {
-    (0, 0)
+    (0, 0, 0)
   }
 }
 
@@ -148,14 +200,28 @@ fn deflate_fixed_payload(data : Bytes) -> Bytes {
   let previous = Array::make(data.length(), -1)
   let mut offset = 0
   while offset < data.length() {
-    let (length, distance) = deflate_find_match(data, offset, head, previous)
-    if length >= 3 {
-      deflate_write_length(writer, length)
-      deflate_write_distance(writer, distance)
-      for index = 0; index < length; index = index + 1 {
-        deflate_insert(data, offset + index, head, previous)
+    let (length, distance, savings) = deflate_find_match(
+      data, offset, head, previous,
+    )
+    if savings > 0 {
+      deflate_insert(data, offset, head, previous)
+      let (_, _, next_savings) = deflate_find_match(
+        data,
+        offset + 1,
+        head,
+        previous,
+      )
+      if next_savings > savings {
+        deflate_write_fixed_symbol(writer, data.unsafe_get(offset).to_int())
+        offset = offset + 1
+      } else {
+        deflate_write_length(writer, length)
+        deflate_write_distance(writer, distance)
+        for index = 1; index < length; index = index + 1 {
+          deflate_insert(data, offset + index, head, previous)
+        }
+        offset = offset + length
       }
-      offset = offset + length
     } else {
       deflate_write_fixed_symbol(writer, data.unsafe_get(offset).to_int())
       deflate_insert(data, offset, head, previous)

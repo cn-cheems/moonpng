@@ -10,6 +10,8 @@
   and dynamic-Huffman blocks.
 - Added deterministic fixed-Huffman zlib compression with a bounded 32 KiB
   hash-chain LZ77 matcher and standalone round-trip coverage.
+- Added fixed-code bit-cost scoring and one-step lazy matching to avoid
+  unprofitable LZ77 references and improve match selection.
 - Added stored, fixed-Huffman, and shortest-output automatic compression
   strategies for buffered PNG encoding.
 - Added Adler-32 validation, bounded back-references, and trailing-data checks.

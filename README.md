@@ -28,8 +28,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - deterministically encodes 8-bit grayscale, grayscale-alpha, RGB, and RGBA
   pixels using their native PNG color types;
 - offers fixed and adaptive selection across all five PNG row filters;
-- compresses standalone zlib streams with bounded LZ77 matching and fixed
-  Huffman codes;
+- compresses standalone zlib streams with cost-aware bounded LZ77 matching,
+  one-step lazy matching, and fixed Huffman codes;
 - selects stored, fixed-Huffman, or shortest-output automatic compression for
   buffered PNG encoding;
 - splits zlib output across caller-sized consecutive IDAT chunks;
@@ -220,9 +220,12 @@ match @moonpng.inflate_zlib(compressed) {
 
 The compressor searches a 32 KiB history window through bounded hash chains,
 emits matches from 3 through 258 bytes, and writes one fixed-Huffman DEFLATE
-block. Buffered PNG encoding uses the same implementation for
-`CompressionFixed` and `CompressionAuto`. Text metadata compression and the
-bounded row-oriented encoder continue to use stored blocks.
+block. A candidate is emitted only when its length and distance codes cost
+fewer bits than the equivalent literals. The encoder also looks one byte ahead
+and defers a match when the next position produces a larger saving. Buffered
+PNG encoding uses the same implementation for `CompressionFixed` and
+`CompressionAuto`. Text metadata compression and the bounded row-oriented
+encoder continue to use stored blocks.
 
 ## Architecture
 

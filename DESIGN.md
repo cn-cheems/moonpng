@@ -81,9 +81,13 @@ signature is emitted.
 fixed-Huffman DEFLATE block. Its LZ77 matcher keeps the most recent position for
 each three-byte hash and follows at most 128 prior positions. Candidates older
 than the 32 KiB DEFLATE window are discarded. Greedy matches are capped at 258
-bytes, and equal-length matches retain the nearest distance for deterministic
-output. Literal/length and distance codes are converted from canonical Huffman
-order before being written to the least-significant-bit-first DEFLATE stream.
+bytes. Each candidate is scored against the exact fixed-Huffman bit cost of its
+literal bytes; matches with no positive saving are discarded. Ties prefer a
+longer match and then the nearest distance. Before emitting a profitable match,
+the encoder inserts the current position and checks the next byte. It emits the
+current byte as a literal when that next match has a larger saving. Literal,
+length, and distance codes are converted from canonical Huffman order before
+being written to the least-significant-bit-first DEFLATE stream.
 
 The compressor accepts a complete byte buffer and keeps one previous hash-chain
 link per input byte. It is exposed independently and is also used by buffered
