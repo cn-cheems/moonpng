@@ -40,6 +40,8 @@
   continuous bit packing, and bounded IDAT emission.
 - Added exact per-scanline automatic compression selection with mixed stored
   and fixed-Huffman blocks under the same row-oriented memory bound.
+- Added a deterministic compression benchmark covering solid, gradient, tiled,
+  and high-entropy RGBA8 workloads with mandatory decode round-trip checks.
 - Added a MoonBit-driven browser workbench with local file loading, decoded
   canvas preview, chunk inspection, re-encoding, and pixel round-trip checks.
 - Added bounded `tEXt`, `zTXt`, and `iTXt` extraction with Latin-1, UTF-8,

@@ -47,6 +47,7 @@ Repository: <https://github.com/cn-cheems/moonpng>
 moon check
 moon test
 moon run cmd/main
+moon run cmd/bench --target native --release
 ```
 
 Expected demo output:
@@ -56,6 +57,23 @@ MoonPNG decode demo
 image: 1x1, format=RGBA8
 pixel(0, 0): rgba(255, 0, 0, 255)
 ```
+
+`cmd/bench` compares stored, fixed-Huffman, and automatic compression on four
+deterministic RGBA8 workloads: a solid image, a gradient, repeated tiles, and
+high-entropy noise. Every encoded PNG is decoded and checked byte-for-byte
+before its size is reported, so the command serves as both a reproducible size
+benchmark and an end-to-end codec smoke test.
+
+| Sample | Raw RGBA8 | Stored PNG | Fixed PNG | Auto PNG | Auto / raw | Selected |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Solid | 65,536 | 65,737 | 695 | 695 | 1.1% | Fixed |
+| Gradient | 65,536 | 65,737 | 632 | 632 | 1.0% | Fixed |
+| Tiles | 65,536 | 65,737 | 738 | 738 | 1.1% | Fixed |
+| Noise | 65,536 | 65,737 | 68,584 | 65,737 | 100.3% | Stored |
+
+Sizes are deterministic bytes produced by the current encoder. The noise case
+also demonstrates why automatic selection retains stored blocks when fixed
+Huffman coding would increase the output size.
 
 ## Browser workbench
 
@@ -249,8 +267,7 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 ## Roadmap
 
 1. Add broader conformance fixtures and property-based malformed-input tests.
-2. Add compression benchmarks and tune match-search limits against realistic
-   image corpora.
+2. Tune match-search limits against a documented, redistributable image corpus.
 3. Add fuzzing and dynamic-Huffman encoding.
 
 ## Project status

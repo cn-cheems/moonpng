@@ -27,6 +27,9 @@ jobs:
       - name: Build browser workbench
         if: runner.os == 'Linux'
         run: moon build cmd/web --target js --release --deny-warn
+      - name: Run compression benchmark
+        if: runner.os == 'Linux'
+        run: moon run cmd/bench --target native --release
       - name: Verify generated interfaces and formatting
         shell: bash
         run: |
