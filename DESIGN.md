@@ -112,8 +112,9 @@ independent limits for entry count, encoded bytes, and decoded bytes.
 
 The metadata writer validates every field before producing output. Addition and
 replacement insert complete text chunks before the first IDAT chunk, preserving
-all unrelated chunks and image data byte-for-byte. Compressed entries use the
-deterministic stored-DEFLATE encoder, so identical input produces identical PNG
+all unrelated chunks and image data byte-for-byte. Compressed entries compare
+deterministic stored and fixed-Huffman streams, retaining the shorter result and
+preferring stored blocks on a tie. Identical input still produces identical PNG
 bytes.
 
 ## Security invariants

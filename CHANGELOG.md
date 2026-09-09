@@ -50,6 +50,8 @@
   language-tag, compression-method, and aggregate-size validation.
 - Added deterministic text insertion and replacement plus browser metadata
   display and preservation during re-encoding.
+- Added shortest-output automatic DEFLATE selection for compressed `zTXt` and
+  `iTXt` metadata entries.
 - Added exhaustive truncation and single-bit container mutation tests plus
   valid-CRC IHDR semantic conformance cases.
 - Added an interactive browser metadata editor for adding, updating, converting,

@@ -481,7 +481,7 @@ fn text_serialize_entry(
       }
       if entry.format == TextLatin1Compressed {
         payload.push(b'\x00')
-        encode_append_bytes(payload, compress_zlib_stored(text))
+        encode_append_bytes(payload, compress_zlib(text, CompressionAuto))
         let chunk = text_make_chunk(b"zTXt", payload)
         return Ok((chunk, payload.length(), text.length()))
       }
@@ -510,7 +510,7 @@ fn text_serialize_entry(
       encode_append_bytes(payload, translated)
       payload.push(b'\x00')
       if compressed {
-        encode_append_bytes(payload, compress_zlib_stored(text))
+        encode_append_bytes(payload, compress_zlib(text, CompressionAuto))
       } else {
         encode_append_bytes(payload, text)
       }

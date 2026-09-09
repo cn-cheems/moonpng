@@ -1576,6 +1576,59 @@ test "round trip every PNG text format" {
 }
 
 ///|
+test "compress repetitive Latin-1 and international text metadata" {
+  let latin = "MoonPNG metadata ".repeat(256)
+  let international = "月亮图片".repeat(256)
+  let plain_entries = [
+    @moonpng.latin1_text("Description", latin),
+    @moonpng.international_text(
+      "Comment",
+      international,
+      language_tag="zh-Hans",
+      translated_keyword="说明",
+    ),
+  ]
+  let compressed_entries = [
+    @moonpng.latin1_text("Description", latin, compressed=true),
+    @moonpng.international_text(
+      "Comment",
+      international,
+      language_tag="zh-Hans",
+      translated_keyword="说明",
+      compressed=true,
+    ),
+  ]
+  let plain = match
+    @moonpng.replace_text_entries(valid_structural_png(), plain_entries) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let compressed = match
+    @moonpng.replace_text_entries(valid_structural_png(), compressed_entries) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  let repeated = match
+    @moonpng.replace_text_entries(valid_structural_png(), compressed_entries) {
+    Ok(value) => value
+    Err(error) => fail(error.message())
+  }
+  @test.assert_eq(compressed, repeated)
+  @test.assert_eq(compressed.length() * 4 < plain.length(), true)
+  match @moonpng.inspect(compressed) {
+    Ok(info) => {
+      @test.assert_eq(info.chunks[1].kind, "zTXt")
+      @test.assert_eq(info.chunks[2].kind, "iTXt")
+    }
+    Err(error) => fail(error.message())
+  }
+  match @moonpng.read_text_entries(compressed) {
+    Ok(entries) => @test.assert_eq(entries, compressed_entries)
+    Err(error) => fail(error.message())
+  }
+}
+
+///|
 test "add and replace text without changing decoded pixels" {
   let pixels = b"\x11\x22\x33\x44\x55\x66\x77\x88"
   let source = match @moonpng.encode_rgba8(2U, 1U, pixels) {

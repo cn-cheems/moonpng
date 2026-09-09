@@ -23,7 +23,8 @@ Repository: <https://github.com/cn-cheems/moonpng>
 - validates and expands `PLTE` palettes;
 - supports `tRNS` transparency for grayscale, truecolor, and indexed images;
 - reads, validates, adds, and replaces `tEXt`, `zTXt`, and `iTXt` metadata,
-  including bounded zlib decompression and UTF-8 validation;
+  including automatic text compression, bounded decompression, and UTF-8
+  validation;
 - converts decoded output to row-major RGBA8;
 - deterministically encodes 8-bit grayscale, grayscale-alpha, RGB, and RGBA
   pixels using their native PNG color types;
@@ -253,8 +254,8 @@ PNG encoding uses the same implementation for `CompressionFixed` and
 `CompressionAuto`. Row-oriented Fixed encoding reuses the matcher separately
 for each scanline and writes consecutive blocks through the same bit stream.
 Row-oriented Auto performs the same comparison per scanline so candidate memory
-is released before the next row. Text metadata compression continues to use
-stored blocks.
+is released before the next row. Compressed `zTXt` and `iTXt` entries also use
+automatic selection, avoiding fixed-Huffman expansion on incompressible text.
 
 ## Architecture
 
