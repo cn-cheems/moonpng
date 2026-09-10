@@ -19,8 +19,8 @@ repository = "https://github.com/cn-cheems/moonpng"
 
 license = "Apache-2.0"
 
-keywords = [ "png", "image", "codec", "crc32", "wasm" ]
+keywords = [ "png", "validation", "security", "metadata", "wasm" ]
 
 preferred_target = "wasm-gc"
 
-description = "A pure MoonBit PNG parser, validator, and codec toolkit."
+description = "Defensive PNG validation, diagnostics, and controlled rewriting in MoonBit."

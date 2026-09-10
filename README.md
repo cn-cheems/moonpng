@@ -1,8 +1,14 @@
-# MoonPNG
+# MoonPNG Guard
 
-MoonPNG is a pure MoonBit PNG codec toolkit. It validates the PNG
-container, inflates zlib/DEFLATE image data, reverses PNG scanline filters, and
-returns portable RGBA8 pixels without FFI or platform-specific dependencies.
+MoonPNG is a defensive PNG validation, diagnostics, and controlled-rewriting
+toolkit written in MoonBit. It focuses on untrusted inputs, explicit resource
+budgets, actionable format errors, bounded processing, and browser-side
+inspection. A self-contained codec provides the foundation without FFI or
+platform-specific image libraries.
+
+MoonPNG complements rather than replaces general image libraries. Its scope and
+relationship to the existing `gmlewis/image/png` package are documented in
+[RELATED_PROJECTS.md](RELATED_PROJECTS.md).
 
 Repository: <https://github.com/cn-cheems/moonpng>
 
@@ -50,6 +56,16 @@ moon test
 moon run cmd/main
 moon run cmd/bench --target native --release
 ```
+
+For CI or upload pipelines, run the guard command on one or more files:
+
+```bash
+moon run cmd/guard --target js -- image.png another.png
+```
+
+It emits one JSON object per input. Exit status `0` means every file passed
+container, metadata, resource-limit, decompression, filter, and pixel checks;
+`1` means at least one PNG was rejected; `2` reports usage or file-read errors.
 
 Expected demo output:
 
