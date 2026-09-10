@@ -60,12 +60,18 @@ moon run cmd/bench --target native --release
 For CI or upload pipelines, run the guard command on one or more files:
 
 ```bash
-moon run cmd/guard --target js -- image.png another.png
+moon run cmd/guard --target js -- \
+  --max-pixels 1000000 \
+  --max-inflated-size 8000000 \
+  image.png another.png
 ```
 
 It emits one JSON object per input. Exit status `0` means every file passed
 container, metadata, resource-limit, decompression, filter, and pixel checks;
 `1` means at least one PNG was rejected; `2` reports usage or file-read errors.
+Chunk size/count, compressed and inflated bytes, pixels, text entry count, and
+encoded/decoded text bytes have independent command-line limits. Run with
+`--help` to list every policy option.
 
 Expected demo output:
 

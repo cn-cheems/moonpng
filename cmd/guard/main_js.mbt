@@ -56,23 +56,32 @@ extern "js" fn node_set_exit_code(code : Int) -> Unit =
 ///|
 fn main {
   let args = @env.args()
-  if args.length() <= 2 {
-    println(
-      "Usage: moon run cmd/guard --target js -- <file.png> [more.png ...]",
-    )
-    node_set_exit_code(2)
-    return
+  let cli_args : Array[String] = []
+  for index = 2; index < args.length(); index = index + 1 {
+    cli_args.push(args[index])
+  }
+  let options = match parse_guard_cli(cli_args) {
+    GuardCliHelp => {
+      println(guard_usage())
+      node_set_exit_code(0)
+      return
+    }
+    GuardCliError(message) => {
+      emit_rejected("", "arguments", message)
+      node_set_exit_code(2)
+      return
+    }
+    GuardCliReady(options) => options
   }
   let mut exit_code = 0
-  for index = 2; index < args.length(); index = index + 1 {
-    let path = args[index]
+  for path in options.files {
     let data = node_read_file(path)
     let read_error = node_last_read_error()
     if read_error != "" {
       emit_rejected(path, "read", read_error)
       exit_code = 2
     } else {
-      match evaluate_png(data) {
+      match evaluate_png_with_policy(data, options.policy) {
         Accepted(summary) => emit_accepted(path, summary)
         Rejected(stage, message) => {
           emit_rejected(path, stage, message)

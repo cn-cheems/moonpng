@@ -1,8 +1,20 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "cn-cheems/moonpng/cmd/guard"
 
+import {
+  "cn-cheems/moonpng",
+}
+
 // Values
+pub fn default_guard_policy() -> GuardPolicy
+
 pub fn evaluate_png(Bytes) -> GuardCheck
+
+pub fn evaluate_png_with_policy(Bytes, GuardPolicy) -> GuardCheck
+
+pub fn guard_usage() -> String
+
+pub fn parse_guard_cli(Array[String]) -> GuardCliParse
 
 // Errors
 
@@ -10,6 +22,22 @@ pub fn evaluate_png(Bytes) -> GuardCheck
 pub(all) enum GuardCheck {
   Accepted(GuardSummary)
   Rejected(String, String)
+}
+
+pub(all) struct GuardCliOptions {
+  policy : GuardPolicy
+  files : Array[String]
+}
+
+pub(all) enum GuardCliParse {
+  GuardCliReady(GuardCliOptions)
+  GuardCliHelp
+  GuardCliError(String)
+}
+
+pub(all) struct GuardPolicy {
+  decode_limits : @moonpng.DecodeLimits
+  text_limits : @moonpng.TextLimits
 }
 
 pub(all) struct GuardSummary {

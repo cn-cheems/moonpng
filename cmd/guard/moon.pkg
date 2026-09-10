@@ -1,6 +1,7 @@
 import {
   "cn-cheems/moonpng",
   "moonbitlang/core/env",
+  "moonbitlang/core/string",
 }
 
 pkgtype(kind: "executable")

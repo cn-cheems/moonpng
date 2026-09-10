@@ -18,18 +18,39 @@ pub(all) enum GuardCheck {
 }
 
 ///|
-pub fn evaluate_png(data : Bytes) -> GuardCheck {
-  let info = match @moonpng.inspect(data) {
+pub(all) struct GuardPolicy {
+  decode_limits : @moonpng.DecodeLimits
+  text_limits : @moonpng.TextLimits
+}
+
+///|
+pub fn default_guard_policy() -> GuardPolicy {
+  {
+    decode_limits: @moonpng.default_decode_limits(),
+    text_limits: @moonpng.default_text_limits(),
+  }
+}
+
+///|
+pub fn evaluate_png_with_policy(
+  data : Bytes,
+  policy : GuardPolicy,
+) -> GuardCheck {
+  let info = match
+    @moonpng.inspect_with_limits(
+      data,
+      max_chunk_size=policy.decode_limits.max_chunk_size,
+      max_chunks=policy.decode_limits.max_chunks,
+    ) {
     Err(error) => return Rejected("container", error.message())
     Ok(info) => info
   }
   let text_entries = match
-    @moonpng.read_text_entries_with_limits(data, @moonpng.default_text_limits()) {
+    @moonpng.read_text_entries_with_limits(data, policy.text_limits) {
     Err(error) => return Rejected("metadata", error.message())
     Ok(entries) => entries.length()
   }
-  let image = match
-    @moonpng.decode_with_limits(data, @moonpng.default_decode_limits()) {
+  let image = match @moonpng.decode_with_limits(data, policy.decode_limits) {
     Err(error) => return Rejected("decode", error.message())
     Ok(image) => image
   }
@@ -50,4 +71,9 @@ pub fn evaluate_png(data : Bytes) -> GuardCheck {
     decoded_bytes: image.pixels.length(),
     text_entries,
   })
+}
+
+///|
+pub fn evaluate_png(data : Bytes) -> GuardCheck {
+  evaluate_png_with_policy(data, default_guard_policy())
 }
