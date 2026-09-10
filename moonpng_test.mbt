@@ -589,6 +589,50 @@ test "standalone zlib strategies select the shortest valid stream" {
 }
 
 ///|
+test "dynamic-Huffman compressor emits deterministic valid streams" {
+  let repeated = Bytes::from_array(Array::make(4096, b'a'))
+  let every_byte : Array[Byte] = []
+  for value = 0; value < 256; value = value + 1 {
+    every_byte.push(value.to_byte())
+  }
+  let noisy_source : Array[Byte] = []
+  let mut state = 1729
+  for index = 0; index < 4096; index = index + 1 {
+    state = (state * 251 + 137) % 65521
+    noisy_source.push((state % 256).to_byte())
+  }
+  let corpus = [
+    b"",
+    b"A",
+    Bytes::from_array(every_byte),
+    repeated,
+    Bytes::from_array(noisy_source),
+  ]
+  for input in corpus {
+    let compressed = @moonpng.compress_zlib_dynamic(input)
+    @test.assert_eq(compressed, @moonpng.compress_zlib_dynamic(input))
+    @test.assert_eq(compressed[2].to_int() & 7, 5)
+    match @moonpng.inflate_zlib(compressed) {
+      Ok(output) => @test.assert_eq(output, input)
+      Err(error) => fail(error.message())
+    }
+  }
+}
+
+///|
+test "dynamic Huffman improves a repetitive standalone stream" {
+  let input = Bytes::from_array(Array::make(4096, b'a'))
+  let dynamic = @moonpng.compress_zlib_dynamic(input)
+  let fixed = @moonpng.compress_zlib_fixed(input)
+  @test.assert_eq(
+    dynamic,
+    b"\x78\x01\xed\xc1\x81\x10\x00\x00\x00\x03\x21\xd6\xf9\x4b\xcc\xe3" +
+    b"\xaf\x1a\x00\x00\x00\x90\x77\xef\xcb\x10\x5b",
+  )
+  @test.assert_eq(dynamic.length() < fixed.length(), true)
+}
+
+///|
 test "inflate stored DEFLATE block" {
   let stream = b"\x78\x01\x01\x0c\x00\xf3\xffstored block\x1f\x80\x04\xbd"
   match @moonpng.inflate_zlib(stream) {

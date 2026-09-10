@@ -36,7 +36,7 @@ Repository: <https://github.com/cn-cheems/moonpng>
   pixels using their native PNG color types;
 - offers fixed and adaptive selection across all five PNG row filters;
 - compresses standalone zlib streams with cost-aware bounded LZ77 matching,
-  one-step lazy matching, and fixed Huffman codes;
+  one-step lazy matching, and fixed or dynamic Huffman codes;
 - selects stored, fixed-Huffman, or shortest-output automatic compression for
   buffered PNG encoding;
 - splits zlib output across caller-sized consecutive IDAT chunks;
@@ -246,9 +246,10 @@ let result = @moonpng.decode_with_limits(png_bytes, limits)
 ```
 
 The zlib layer is also reusable on its own through `inflate_zlib` and
-`inflate_zlib_with_limit`. `compress_zlib_stored` and `compress_zlib_fixed`
-provide explicit deterministic compression paths, while `compress_zlib`
-accepts the same Stored, Fixed, or Auto strategy used by the PNG encoder:
+`inflate_zlib_with_limit`. `compress_zlib_stored`, `compress_zlib_fixed`, and
+`compress_zlib_dynamic` provide explicit deterministic compression paths,
+while `compress_zlib` accepts the Stored, Fixed, or Auto strategy used by the
+PNG encoder:
 
 ```moonbit
 let compressed = @moonpng.compress_zlib(
@@ -267,7 +268,9 @@ block. A candidate is emitted only when its length and distance codes cost
 fewer bits than the equivalent literals. The encoder also looks one byte ahead
 and defers a match when the next position produces a larger saving. Match
 decisions are retained as reusable literal and length/distance tokens before
-Huffman coding. Buffered PNG encoding uses the same implementation for
+Huffman coding. The standalone dynamic encoder derives length-limited canonical
+code tables and run-length encodes their description as an RFC 1951 dynamic
+block. Buffered PNG encoding uses the same implementation for
 `CompressionFixed` and `CompressionAuto`. Row-oriented Fixed encoding reuses
 the matcher separately for each scanline and writes consecutive blocks through
 the same bit stream.
@@ -291,7 +294,7 @@ See [DESIGN.md](DESIGN.md) for the invariants and module boundaries.
 
 1. Extend deterministic mutation coverage with randomized malformed-input tests.
 2. Tune match-search limits against a documented, redistributable image corpus.
-3. Add fuzzing and dynamic-Huffman encoding.
+3. Add fuzzing and integrate dynamic-Huffman into PNG compression selection.
 
 ## Project status
 

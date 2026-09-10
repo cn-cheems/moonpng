@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "cn-cheems/moonpng/cmd/guard"
+
+// Values
+pub fn evaluate_png(Bytes) -> GuardCheck
+
+// Errors
+
+// Types and methods
+pub(all) enum GuardCheck {
+  Accepted(GuardSummary)
+  Rejected(String, String)
+}
+
+pub(all) struct GuardSummary {
+  width : UInt
+  height : UInt
+  bit_depth : Byte
+  color_type : Byte
+  interlace_method : Byte
+  chunk_count : Int
+  idat_bytes : Int
+  decoded_bytes : Int
+  text_entries : Int
+}
+
+// Type aliases
+
+// Traits

@@ -12,6 +12,8 @@ pub fn adler32(Bytes) -> UInt
 
 pub fn compress_zlib(Bytes, CompressionStrategy) -> Bytes
 
+pub fn compress_zlib_dynamic(Bytes) -> Bytes
+
 pub fn compress_zlib_fixed(Bytes) -> Bytes
 
 pub fn compress_zlib_stored(Bytes) -> Bytes

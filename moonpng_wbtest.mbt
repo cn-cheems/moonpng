@@ -232,3 +232,27 @@ test "tokenized fixed-Huffman output matches the legacy writer byte-for-byte" {
     fixed_blocks_payload_for_test(blocks, true),
   )
 }
+
+///|
+test "limit dynamic Huffman depths without oversubscribing the tree" {
+  let frequencies = Array::make(19, 0)
+  let mut previous = 1
+  let mut current = 1
+  for symbol = 0; symbol < frequencies.length(); symbol = symbol + 1 {
+    frequencies[symbol] = previous
+    let next = previous + current
+    previous = current
+    current = next
+  }
+  let lengths = deflate_build_code_lengths(frequencies, 7)
+  let mut capacity = 0
+  for length in lengths {
+    @test.assert_eq(length > 0 && length <= 7, true)
+    capacity = capacity + (1 << (7 - length))
+  }
+  @test.assert_eq(capacity, 128)
+  match build_huffman(lengths) {
+    Ok(_) => ()
+    Err(error) => fail(error.message())
+  }
+}

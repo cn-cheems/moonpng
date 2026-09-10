@@ -97,6 +97,13 @@ tokens before entropy coding. The fixed writer converts their canonical
 Huffman codes before writing them to the least-significant-bit-first DEFLATE
 stream.
 
+The dynamic writer counts symbols from the same token stream, builds
+deterministic length-limited Huffman trees, and assigns canonical codes. It
+trims unused trailing symbols and run-length encodes the combined literal and
+distance code lengths through DEFLATE's 19-symbol code-length alphabet. The
+result is a single standards-compliant dynamic block with the same Adler-32
+zlib envelope used by the other compression paths.
+
 The compressor accepts a complete byte buffer and keeps one previous hash-chain
 link per input byte. It is exposed independently and is also used by buffered
 PNG encoding. Automatic compression holds both candidate zlib streams briefly

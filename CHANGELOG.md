@@ -14,6 +14,8 @@
   unprofitable LZ77 references and improve match selection.
 - Separated LZ77 parsing into a reusable literal/match token stream while
   preserving fixed-Huffman output byte-for-byte.
+- Added deterministic standalone dynamic-Huffman zlib compression with
+  length-limited canonical codes and run-length encoded tree descriptions.
 - Added stored, fixed-Huffman, and shortest-output automatic compression
   strategies for buffered PNG encoding.
 - Exposed stored, fixed-Huffman, and shortest-output automatic compression
